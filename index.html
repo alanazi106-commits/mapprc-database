@@ -676,11 +676,11 @@
                 fontSize: 13.5,
                 color: a.ink
             }
-        }, ["Browse", "Research", "Services", "News", "About"].map((t, p) => React.createElement("a", {
+        }, ["Browse", "Tools", "Research", "Services", "News", "About"].map((t, p) => React.createElement("a", {
             key: t,
             href: "#",
             onClick: h => {
-                h.preventDefault(), t === "Browse" ? n("/browse") : t === "About" ? n("/about") : t === "Research" ? n("/research") : t === "Services" ? n("/services") : t === "News" && n("/news")
+                h.preventDefault(), t === "Browse" ? n("/browse") : t === "Tools" ? n("/tools") : t === "About" ? n("/about") : t === "Research" ? n("/research") : t === "Services" ? n("/services") : t === "News" && n("/news")
             },
             style: {
                 color: a.ink,
@@ -1519,6 +1519,8 @@
             navigate: e
         }) : l.route === "news" ? React.createElement(ka, {
             navigate: e
+        }) : l.route === "tools" ? React.createElement(ToolsPage, {
+            navigate: e
         }) : React.createElement(na, {
             navigate: e
         }))
@@ -1556,7 +1558,7 @@
         } : s[0] === "species" && s[1] ? {
             route: "species",
             slug: QS(s[1])
-        } : ["about", "research", "services", "news"].includes(s[0]) ? {
+        } : ["about", "research", "services", "news", "tools"].includes(s[0]) ? {
             route: s[0]
         } : {
             route: "home"
@@ -1799,11 +1801,11 @@
                 gap: 26,
                 fontSize: 13.5
             }
-        }, ["Browse", "Research", "Services", "News", "About"].map(m => React.createElement("a", {
+        }, ["Browse", "Tools", "Research", "Services", "News", "About"].map(m => React.createElement("a", {
             key: m,
             href: "#",
             onClick: y => {
-                y.preventDefault(), m === "Browse" ? n("/browse") : m === "About" ? n("/about") : m === "Research" ? n("/research") : m === "Services" ? n("/services") : m === "News" && n("/news")
+                y.preventDefault(), m === "Browse" ? n("/browse") : m === "Tools" ? n("/tools") : m === "About" ? n("/about") : m === "Research" ? n("/research") : m === "Services" ? n("/services") : m === "News" && n("/news")
             },
             style: {
                 color: m === "Browse" ? u.forest : u.ink,
@@ -3058,10 +3060,11 @@
                 gap: 26,
                 fontSize: 13
             }
-        }, ["Browse", "Research", "Services", "News", "About"].map(i => {
+        }, ["Browse", "Tools", "Research", "Services", "News", "About"].map(i => {
             const a = o === i.toLowerCase(),
                 c = {
                     Browse: "/browse",
+                    Tools: "/tools",
                     Research: "/research",
                     Services: "/services",
                     News: "/news",
@@ -6993,6 +6996,528 @@
             }
         }, l[r % l.length])
     }
+    // ── TOOLS PAGE ─────────────────────────────────────────────────────────────
+    function ToolsPage({ navigate }) {
+        const PAL = { paper:"#FFFFFF", paperDeep:"#F4F7FA", ink:"#0F172A", forest:"#0B3C5D", sage:"#4A6274", rule:"#E3E8EE", muted:"#6B7280", terracotta:"#1B6FB5" };
+        const [tab, setTab] = React.useState("network");
+
+        return React.createElement("div", { style:{ minHeight:"100vh", background: PAL.paperDeep, fontFamily:"'Source Sans 3',system-ui,sans-serif" } },
+            // ── page header
+            React.createElement("div", { style:{ background: PAL.forest, color:"#fff", padding:"48px 48px 36px" } },
+                React.createElement("div", { style:{ fontSize:11, letterSpacing:3, opacity:.6, marginBottom:8, textTransform:"uppercase" } }, "MAPPRC · ANALYTICAL TOOLS"),
+                React.createElement("h1", { style:{ margin:0, fontSize:36, fontFamily:"'Source Serif 4',serif", fontWeight:600 } }, "Research Tools"),
+                React.createElement("p", { style:{ margin:"12px 0 0", fontSize:15, opacity:.75, maxWidth:600 } },
+                    "Interactive visualisations built on the 2,642-species MAPPRC database — explore compound networks and genetic relationships across the Saudi flora.")
+            ),
+            // ── tab bar
+            React.createElement("div", { style:{ background: PAL.paper, borderBottom:`1px solid ${PAL.rule}`, padding:"0 48px", display:"flex", gap:0 } },
+                ["network","phylogeny"].map(id => {
+                    const labels = { network:"⬡ Phytochemistry Network", phylogeny:"🌿 Genetic Relationships" };
+                    const active = tab === id;
+                    return React.createElement("button", {
+                        key: id,
+                        onClick: () => setTab(id),
+                        style:{ background:"none", border:"none", borderBottom: active ? `2px solid ${PAL.forest}` : "2px solid transparent",
+                            color: active ? PAL.forest : PAL.muted, fontFamily:"inherit", fontSize:14, fontWeight: active ? 600 : 400,
+                            padding:"16px 24px 14px", cursor:"pointer", marginRight:4 }
+                    }, labels[id])
+                })
+            ),
+            // ── tool panels
+            tab === "network" ? React.createElement(PhytoNetworkTool, { pal: PAL, navigate }) :
+                               React.createElement(GeneticTreeTool,  { pal: PAL, navigate })
+        )
+    }
+
+    // ── TOOL 1 : PHYTOCHEMISTRY NETWORK ────────────────────────────────────────
+    function PhytoNetworkTool({ pal, navigate }) {
+        const [query, setQuery]   = React.useState("");
+        const [center, setCenter] = React.useState(null);  // {type:"species"|"compound", label}
+        const [graph,  setGraph]  = React.useState(null);  // {nodes, links}
+        const [info,   setInfo]   = React.useState(null);
+        const [hover,  setHover]  = React.useState(null);
+        const svgRef = React.useRef(null);
+        const D3_URL = "https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js";
+
+        // build graph data for a focal species
+        function buildSpeciesGraph(sp) {
+            const compounds = parseCompounds(sp.phytochemistry || "");
+            if (!compounds.length) return null;
+            const nodes = [{ id:"sp:"+sp.sl, label: sp.s, type:"species", sp }];
+            const links = [];
+            const cpSet = new Set();
+            compounds.slice(0,30).forEach(c => {
+                if (!cpSet.has(c)) { cpSet.add(c); nodes.push({ id:"cp:"+c, label:c, type:"compound" }); }
+                links.push({ source:"sp:"+sp.sl, target:"cp:"+c });
+            });
+            // find 5 related species that share compounds
+            const cpArr = [...cpSet];
+            let related = [];
+            for (let i = 0; i < SPECIES.length && related.length < 5; i++) {
+                const s2 = SPECIES[i];
+                if (s2.sl === sp.sl) continue;
+                const s2cp = parseCompounds(s2.phytochemistry || "");
+                const shared = s2cp.filter(c => cpSet.has(c));
+                if (shared.length >= 2) related.push({ sp: s2, shared });
+            }
+            related.forEach(({ sp: s2, shared }) => {
+                nodes.push({ id:"sp2:"+s2.sl, label: s2.s, type:"related", sp: s2 });
+                shared.forEach(c => links.push({ source:"sp2:"+s2.sl, target:"cp:"+c }));
+            });
+            return { nodes, links };
+        }
+
+        // build graph for a compound
+        function buildCompoundGraph(cname) {
+            const matches = [];
+            for (let i = 0; i < SPECIES.length && matches.length < 25; i++) {
+                const sp = SPECIES[i];
+                const cps = parseCompounds(sp.phytochemistry || "");
+                if (cps.some(c => c.toLowerCase() === cname.toLowerCase())) matches.push(sp);
+            }
+            if (!matches.length) return null;
+            const nodes = [{ id:"cp:"+cname, label:cname, type:"compound" }];
+            const links = [];
+            matches.forEach(sp => {
+                nodes.push({ id:"sp:"+sp.sl, label: sp.s, type:"species", sp });
+                links.push({ source:"sp:"+sp.sl, target:"cp:"+cname });
+            });
+            return { nodes, links };
+        }
+
+        function parseCompounds(text) {
+            if (!text) return [];
+            return text.split(/[;,]/).map(s => s.trim()).filter(s => s.length > 2 && s.length < 60);
+        }
+
+        // suggestions for search autocomplete
+        const [suggestions, setSuggestions] = React.useState([]);
+        function onQueryChange(v) {
+            setQuery(v);
+            if (v.length < 2) { setSuggestions([]); return; }
+            const vl = v.toLowerCase();
+            const spHits = SPECIES.filter(s => s.s.toLowerCase().includes(vl) || (s.n||"").toLowerCase().includes(vl)).slice(0,5).map(s=>({label:s.s,type:"species",sp:s}));
+            // compound hits — scan up to 500 species
+            const cpSet = new Set();
+            for (let i = 0; i < Math.min(500, SPECIES.length); i++) {
+                parseCompounds(SPECIES[i].phytochemistry||"").forEach(c => { if (c.toLowerCase().includes(vl)) cpSet.add(c); });
+            }
+            const cpHits = [...cpSet].slice(0,4).map(c=>({label:c,type:"compound"}));
+            setSuggestions([...spHits,...cpHits]);
+        }
+
+        function selectSuggestion(s) {
+            setQuery(s.label); setSuggestions([]);
+            setCenter(s);
+            const g = s.type === "species" ? buildSpeciesGraph(s.sp) : buildCompoundGraph(s.label);
+            setGraph(g);
+            setInfo(null);
+        }
+
+        // D3 render
+        React.useEffect(() => {
+            if (!graph || !svgRef.current) return;
+            let d3 = window.d3;
+            if (!d3) return; // loaded async
+            renderD3(d3);
+        }, [graph, hover]);
+
+        function renderD3(d3) {
+            const svg = d3.select(svgRef.current);
+            svg.selectAll("*").remove();
+            const W = svgRef.current.clientWidth || 800, H = 520;
+            svgRef.current.setAttribute("height", H);
+            const nodes = graph.nodes.map(n => ({...n}));
+            const links = graph.links.map(l => ({...l}));
+            const sim = d3.forceSimulation(nodes)
+                .force("link", d3.forceLink(links).id(d=>d.id).distance(d => d.source.type==="compound"||d.target.type==="compound"?80:120).strength(0.8))
+                .force("charge", d3.forceManyBody().strength(-220))
+                .force("center", d3.forceCenter(W/2, H/2))
+                .force("collision", d3.forceCollide(28));
+
+            const g = svg.append("g");
+            svg.call(d3.zoom().scaleExtent([0.3,4]).on("zoom", e => g.attr("transform", e.transform)));
+
+            const link = g.append("g").selectAll("line").data(links).join("line")
+                .attr("stroke","#C8D5E0").attr("stroke-width",1.5).attr("stroke-opacity",0.7);
+
+            const typeColor = { species:"#0B3C5D", compound:"#1B6FB5", related:"#4A6274" };
+            const typeR = { species:22, compound:16, related:18 };
+
+            const node = g.append("g").selectAll("g").data(nodes).join("g")
+                .attr("cursor","pointer")
+                .call(d3.drag().on("start",(e,d)=>{ if(!e.active) sim.alphaTarget(0.3).restart(); d.fx=d.x; d.fy=d.y; })
+                      .on("drag",(e,d)=>{ d.fx=e.x; d.fy=e.y; })
+                      .on("end",(e,d)=>{ if(!e.active) sim.alphaTarget(0); d.fx=null; d.fy=null; }))
+                .on("click",(e,d)=>{ if(d.type==="species"||d.type==="related") setInfo(d.sp); else setInfo({compound:d.label}); });
+
+            node.append("circle").attr("r",d=>typeR[d.type]||16)
+                .attr("fill",d=>typeColor[d.type]||"#888").attr("fill-opacity",0.9)
+                .attr("stroke","#fff").attr("stroke-width",2);
+
+            node.append("text").attr("text-anchor","middle").attr("dy","0.35em")
+                .attr("fill","#fff").attr("font-size",d=>d.type==="compound"?9:10)
+                .attr("font-family","'Source Sans 3',sans-serif").attr("pointer-events","none")
+                .text(d=>{ const l=d.label; return l.length>14?l.slice(0,13)+"…":l; });
+
+            sim.on("tick", () => {
+                link.attr("x1",d=>d.source.x).attr("y1",d=>d.source.y).attr("x2",d=>d.target.x).attr("y2",d=>d.target.y);
+                node.attr("transform",d=>`translate(${d.x},${d.y})`);
+            });
+        }
+
+        // load D3 once
+        React.useEffect(() => {
+            if (window.d3) return;
+            const s = document.createElement("script"); s.src = D3_URL;
+            s.onload = () => { if (graph && svgRef.current) renderD3(window.d3); };
+            document.head.appendChild(s);
+        }, []);
+
+        const E = React.createElement;
+        return E("div", { style:{ padding:"40px 48px", maxWidth:1200, margin:"0 auto" } },
+            // description
+            E("p", { style:{ color: pal.muted, fontSize:14, marginTop:0, marginBottom:28, maxWidth:640 } },
+                "Search a species or compound to explore its phytochemical connections. Blue = focal species, teal = related species, navy = compound. Click any node for details. Drag to rearrange."),
+            // search
+            E("div", { style:{ position:"relative", marginBottom:28 } },
+                E("div", { style:{ display:"flex", gap:8, maxWidth:500 } },
+                    E("input", { value:query, onChange: e=>onQueryChange(e.target.value),
+                        placeholder:"Search species or compound (e.g. Vachellia, quercetin)…",
+                        style:{ flex:1, padding:"10px 14px", borderRadius:6, border:`1px solid ${pal.rule}`, fontFamily:"inherit", fontSize:14 }
+                    }),
+                    E("button", { onClick:()=>{ if(query.length>1) onQueryChange(query); },
+                        style:{ padding:"10px 20px", background: pal.forest, color:"#fff", border:"none", borderRadius:6, fontFamily:"inherit", fontSize:14, cursor:"pointer" }
+                    }, "Search")
+                ),
+                suggestions.length > 0 && E("div", { style:{ position:"absolute", top:42, left:0, background:"#fff", border:`1px solid ${pal.rule}`, borderRadius:6, boxShadow:"0 4px 12px rgba(0,0,0,.1)", zIndex:99, minWidth:380 } },
+                    suggestions.map((s,i) => E("div", { key:i, onClick:()=>selectSuggestion(s),
+                        style:{ padding:"10px 16px", cursor:"pointer", fontSize:13, borderBottom: i<suggestions.length-1?`1px solid ${pal.rule}`:"none",
+                            display:"flex", gap:10, alignItems:"center" } },
+                        E("span", { style:{ fontSize:10, letterSpacing:1, padding:"2px 6px", borderRadius:3,
+                            background: s.type==="species" ? pal.forest : pal.terracotta, color:"#fff", fontWeight:600, textTransform:"uppercase" }
+                        }, s.type),
+                        E("span", { style:{ fontStyle: s.type==="species"?"italic":"normal" } }, s.label)
+                    ))
+                )
+            ),
+            !graph && E("div", { style:{ textAlign:"center", padding:"80px 0", color: pal.muted, fontSize:14 } },
+                E("div", { style:{ fontSize:48, marginBottom:16 } }, "⬡"),
+                E("div", null, "Search a species or compound above to generate the network graph.")
+            ),
+            graph && E("div", { style:{ display:"flex", gap:24, alignItems:"flex-start" } },
+                E("div", { style:{ flex:1, background:"#fff", borderRadius:8, border:`1px solid ${pal.rule}`, overflow:"hidden" } },
+                    E("div", { style:{ padding:"12px 16px", background: pal.forest, color:"#fff", fontSize:12, letterSpacing:1, textTransform:"uppercase" } },
+                        `Network: ${center?.label} · ${graph.nodes.length} nodes · ${graph.links.length} connections`),
+                    E("svg", { ref: svgRef, width:"100%", style:{ display:"block", minHeight:520 } })
+                ),
+                info && E("div", { style:{ width:260, background:"#fff", borderRadius:8, border:`1px solid ${pal.rule}`, padding:20, flexShrink:0 } },
+                    info.compound ?
+                        E("div", null,
+                            E("div", { style:{ fontSize:10, letterSpacing:2, color: pal.muted, textTransform:"uppercase", marginBottom:8 } }, "Compound"),
+                            E("div", { style:{ fontWeight:600, fontSize:16, marginBottom:12 } }, info.compound)
+                        ) :
+                        E("div", null,
+                            E("div", { style:{ fontSize:10, letterSpacing:2, color: pal.muted, textTransform:"uppercase", marginBottom:8 } }, "Species"),
+                            E("div", { style:{ fontStyle:"italic", fontWeight:600, fontSize:15, marginBottom:4, fontFamily:"'Source Serif 4',serif" } }, info.s),
+                            E("div", { style:{ fontSize:12, color: pal.muted, marginBottom:12 } }, info.f),
+                            info.n && E("div", { style:{ fontSize:13, marginBottom:12 } }, info.n),
+                            E("button", { onClick:()=>navigate("/species/"+info.sl),
+                                style:{ padding:"7px 14px", background: pal.forest, color:"#fff", border:"none", borderRadius:5, fontFamily:"inherit", fontSize:13, cursor:"pointer", width:"100%" }
+                            }, "Open species record →")
+                        ),
+                    E("button", { onClick:()=>setInfo(null), style:{ marginTop:12, fontSize:12, color: pal.muted, background:"none", border:"none", cursor:"pointer", padding:0 } }, "✕ Close")
+                )
+            ),
+            // legend
+            graph && E("div", { style:{ display:"flex", gap:20, marginTop:16, fontSize:12, color: pal.muted } },
+                [["#0B3C5D","Focal species"],["#4A6274","Related species"],["#1B6FB5","Compound"]].map(([col,lab])=>
+                    E("div", { key:lab, style:{ display:"flex", alignItems:"center", gap:6 } },
+                        E("div", { style:{ width:12, height:12, borderRadius:"50%", background:col } }),
+                        E("span", null, lab)
+                    )
+                )
+            )
+        )
+    }
+
+    // ── TOOL 2 : GENETIC RELATIONSHIPS (APG IV CLADE TREE) ─────────────────────
+    function GeneticTreeTool({ pal, navigate }) {
+        const [query, setQuery]  = React.useState("");
+        const [picked, setPicked] = React.useState(null); // {family, order, clade, superorder}
+        const [suggestions, setSuggestions] = React.useState([]);
+
+        // APG IV classification map for families present in Saudi flora
+        const APG = {
+            // Basal angiosperms
+            "Nymphaeaceae":      { clade:"Basal angiosperms",  order:"Nymphaeales" },
+            // Monocots
+            "Poaceae":           { clade:"Monocots", superorder:"Commelinids", order:"Poales" },
+            "Cyperaceae":        { clade:"Monocots", superorder:"Commelinids", order:"Poales" },
+            "Juncaceae":         { clade:"Monocots", superorder:"Commelinids", order:"Poales" },
+            "Arecaceae":         { clade:"Monocots", superorder:"Commelinids", order:"Arecales" },
+            "Asparagaceae":      { clade:"Monocots", superorder:"Lilioids",    order:"Asparagales" },
+            "Iridaceae":         { clade:"Monocots", superorder:"Lilioids",    order:"Asparagales" },
+            "Orchidaceae":       { clade:"Monocots", superorder:"Lilioids",    order:"Asparagales" },
+            "Liliaceae":         { clade:"Monocots", superorder:"Lilioids",    order:"Liliales" },
+            "Colchicaceae":      { clade:"Monocots", superorder:"Lilioids",    order:"Liliales" },
+            "Alismataceae":      { clade:"Monocots", superorder:"Alismatids",  order:"Alismatales" },
+            "Araceae":           { clade:"Monocots", superorder:"Alismatids",  order:"Alismatales" },
+            "Zingiberaceae":     { clade:"Monocots", superorder:"Commelinids", order:"Zingiberales" },
+            // Eudicots – Basal
+            "Ranunculaceae":     { clade:"Eudicots", superorder:"Basal eudicots", order:"Ranunculales" },
+            "Papaveraceae":      { clade:"Eudicots", superorder:"Basal eudicots", order:"Ranunculales" },
+            "Berberidaceae":     { clade:"Eudicots", superorder:"Basal eudicots", order:"Ranunculales" },
+            "Proteaceae":        { clade:"Eudicots", superorder:"Basal eudicots", order:"Proteales" },
+            "Nelumbonaceae":     { clade:"Eudicots", superorder:"Basal eudicots", order:"Proteales" },
+            "Buxaceae":          { clade:"Eudicots", superorder:"Basal eudicots", order:"Buxales" },
+            // Rosids
+            "Fabaceae":          { clade:"Eudicots", superorder:"Rosids", order:"Fabales" },
+            "Polygalaceae":      { clade:"Eudicots", superorder:"Rosids", order:"Fabales" },
+            "Rosaceae":          { clade:"Eudicots", superorder:"Rosids", order:"Rosales" },
+            "Rhamnaceae":        { clade:"Eudicots", superorder:"Rosids", order:"Rosales" },
+            "Ulmaceae":          { clade:"Eudicots", superorder:"Rosids", order:"Rosales" },
+            "Moraceae":          { clade:"Eudicots", superorder:"Rosids", order:"Rosales" },
+            "Urticaceae":        { clade:"Eudicots", superorder:"Rosids", order:"Rosales" },
+            "Cucurbitaceae":     { clade:"Eudicots", superorder:"Rosids", order:"Cucurbitales" },
+            "Begoniaceae":       { clade:"Eudicots", superorder:"Rosids", order:"Cucurbitales" },
+            "Fagaceae":          { clade:"Eudicots", superorder:"Rosids", order:"Fagales" },
+            "Betulaceae":        { clade:"Eudicots", superorder:"Rosids", order:"Fagales" },
+            "Juglandaceae":      { clade:"Eudicots", superorder:"Rosids", order:"Fagales" },
+            "Oxalidaceae":       { clade:"Eudicots", superorder:"Rosids", order:"Oxalidales" },
+            "Geraniaceae":       { clade:"Eudicots", superorder:"Rosids", order:"Geraniales" },
+            "Euphorbiaceae":     { clade:"Eudicots", superorder:"Rosids", order:"Malpighiales" },
+            "Violaceae":         { clade:"Eudicots", superorder:"Rosids", order:"Malpighiales" },
+            "Salicaceae":        { clade:"Eudicots", superorder:"Rosids", order:"Malpighiales" },
+            "Linaceae":          { clade:"Eudicots", superorder:"Rosids", order:"Malpighiales" },
+            "Passifloraceae":    { clade:"Eudicots", superorder:"Rosids", order:"Malpighiales" },
+            "Myrtaceae":         { clade:"Eudicots", superorder:"Rosids", order:"Myrtales" },
+            "Lythraceae":        { clade:"Eudicots", superorder:"Rosids", order:"Myrtales" },
+            "Onagraceae":        { clade:"Eudicots", superorder:"Rosids", order:"Myrtales" },
+            "Combretaceae":      { clade:"Eudicots", superorder:"Rosids", order:"Myrtales" },
+            "Brassicaceae":      { clade:"Eudicots", superorder:"Rosids", order:"Brassicales" },
+            "Capparaceae":       { clade:"Eudicots", superorder:"Rosids", order:"Brassicales" },
+            "Cleomaceae":        { clade:"Eudicots", superorder:"Rosids", order:"Brassicales" },
+            "Resedaceae":        { clade:"Eudicots", superorder:"Rosids", order:"Brassicales" },
+            "Malvaceae":         { clade:"Eudicots", superorder:"Rosids", order:"Malvales" },
+            "Cistaceae":         { clade:"Eudicots", superorder:"Rosids", order:"Malvales" },
+            "Thymelaeaceae":     { clade:"Eudicots", superorder:"Rosids", order:"Malvales" },
+            "Anacardiaceae":     { clade:"Eudicots", superorder:"Rosids", order:"Sapindales" },
+            "Sapindaceae":       { clade:"Eudicots", superorder:"Rosids", order:"Sapindales" },
+            "Rutaceae":          { clade:"Eudicots", superorder:"Rosids", order:"Sapindales" },
+            "Meliaceae":         { clade:"Eudicots", superorder:"Rosids", order:"Sapindales" },
+            "Burseraceae":       { clade:"Eudicots", superorder:"Rosids", order:"Sapindales" },
+            "Zygophyllaceae":    { clade:"Eudicots", superorder:"Rosids", order:"Zygophyllales" },
+            "Nitrariaceae":      { clade:"Eudicots", superorder:"Rosids", order:"Zygophyllales" },
+            "Vitaceae":          { clade:"Eudicots", superorder:"Rosids", order:"Vitales" },
+            // Asterids
+            "Apocynaceae":       { clade:"Eudicots", superorder:"Asterids", order:"Gentianales" },
+            "Rubiaceae":         { clade:"Eudicots", superorder:"Asterids", order:"Gentianales" },
+            "Gentianaceae":      { clade:"Eudicots", superorder:"Asterids", order:"Gentianales" },
+            "Loganiaceae":       { clade:"Eudicots", superorder:"Asterids", order:"Gentianales" },
+            "Convolvulaceae":    { clade:"Eudicots", superorder:"Asterids", order:"Solanales" },
+            "Solanaceae":        { clade:"Eudicots", superorder:"Asterids", order:"Solanales" },
+            "Boraginaceae":      { clade:"Eudicots", superorder:"Asterids", order:"Boraginales" },
+            "Lamiaceae":         { clade:"Eudicots", superorder:"Asterids", order:"Lamiales" },
+            "Plantaginaceae":    { clade:"Eudicots", superorder:"Asterids", order:"Lamiales" },
+            "Scrophulariaceae":  { clade:"Eudicots", superorder:"Asterids", order:"Lamiales" },
+            "Orobanchaceae":     { clade:"Eudicots", superorder:"Asterids", order:"Lamiales" },
+            "Acanthaceae":       { clade:"Eudicots", superorder:"Asterids", order:"Lamiales" },
+            "Bignoniaceae":      { clade:"Eudicots", superorder:"Asterids", order:"Lamiales" },
+            "Verbenaceae":       { clade:"Eudicots", superorder:"Asterids", order:"Lamiales" },
+            "Oleaceae":          { clade:"Eudicots", superorder:"Asterids", order:"Lamiales" },
+            "Asteraceae":        { clade:"Eudicots", superorder:"Asterids", order:"Asterales" },
+            "Campanulaceae":     { clade:"Eudicots", superorder:"Asterids", order:"Asterales" },
+            "Goodeniaceae":      { clade:"Eudicots", superorder:"Asterids", order:"Asterales" },
+            "Apiaceae":          { clade:"Eudicots", superorder:"Asterids", order:"Apiales" },
+            "Araliaceae":        { clade:"Eudicots", superorder:"Asterids", order:"Apiales" },
+            "Ericaceae":         { clade:"Eudicots", superorder:"Asterids", order:"Ericales" },
+            "Primulaceae":       { clade:"Eudicots", superorder:"Asterids", order:"Ericales" },
+            "Theaceae":          { clade:"Eudicots", superorder:"Asterids", order:"Ericales" },
+            "Ebenaceae":         { clade:"Eudicots", superorder:"Asterids", order:"Ericales" },
+            "Sapotaceae":        { clade:"Eudicots", superorder:"Asterids", order:"Ericales" },
+            "Aquifoliaceae":     { clade:"Eudicots", superorder:"Asterids", order:"Aquifoliales" },
+            "Adoxaceae":         { clade:"Eudicots", superorder:"Asterids", order:"Dipsacales" },
+            "Caprifoliaceae":    { clade:"Eudicots", superorder:"Asterids", order:"Dipsacales" },
+            "Dipsacaceae":       { clade:"Eudicots", superorder:"Asterids", order:"Dipsacales" },
+            "Valerianaceae":     { clade:"Eudicots", superorder:"Asterids", order:"Dipsacales" },
+            // Core eudicots — other
+            "Caryophyllaceae":   { clade:"Eudicots", superorder:"Core eudicots", order:"Caryophyllales" },
+            "Amaranthaceae":     { clade:"Eudicots", superorder:"Core eudicots", order:"Caryophyllales" },
+            "Chenopodiaceae":    { clade:"Eudicots", superorder:"Core eudicots", order:"Caryophyllales" },
+            "Polygonaceae":      { clade:"Eudicots", superorder:"Core eudicots", order:"Caryophyllales" },
+            "Nyctaginaceae":     { clade:"Eudicots", superorder:"Core eudicots", order:"Caryophyllales" },
+            "Aizoaceae":         { clade:"Eudicots", superorder:"Core eudicots", order:"Caryophyllales" },
+            "Portulacaceae":     { clade:"Eudicots", superorder:"Core eudicots", order:"Caryophyllales" },
+            "Tamaricaceae":      { clade:"Eudicots", superorder:"Core eudicots", order:"Caryophyllales" },
+            "Plumbaginaceae":    { clade:"Eudicots", superorder:"Core eudicots", order:"Caryophyllales" },
+            "Saxifragaceae":     { clade:"Eudicots", superorder:"Core eudicots", order:"Saxifragales" },
+            "Crassulaceae":      { clade:"Eudicots", superorder:"Core eudicots", order:"Saxifragales" },
+            "Vitaceae":          { clade:"Eudicots", superorder:"Core eudicots", order:"Vitales" },
+            // Gymnosperms
+            "Ephedraceae":       { clade:"Gymnosperms", superorder:"Gnetales", order:"Ephedrales" },
+            "Pinaceae":          { clade:"Gymnosperms", superorder:"Conifers",  order:"Pinales" },
+            "Cupressaceae":      { clade:"Gymnosperms", superorder:"Conifers",  order:"Pinales" },
+        };
+
+        function lookupFamily(fam) { return APG[fam] || { clade:"Unknown", superorder:"Unknown", order:"Unknown" }; }
+
+        // get all species in same family
+        function speciesInFamily(fam) { return SPECIES.filter(s => s.f === fam); }
+        // get all species in same order
+        function speciesInOrder(order) { return SPECIES.filter(s => APG[s.f] && APG[s.f].order === order); }
+
+        function onQueryChange(v) {
+            setQuery(v);
+            if (v.length < 2) { setSuggestions([]); return; }
+            const vl = v.toLowerCase();
+            // species hits
+            const spHits = SPECIES.filter(s => s.s.toLowerCase().includes(vl)||(s.f||"").toLowerCase().includes(vl)).slice(0,8)
+                .map(s=>({ label:s.s, sublabel:s.f, type:"species", sp:s, family:s.f }));
+            // direct family hits
+            const famHits = [...new Set(SPECIES.map(s=>s.f))].filter(f=>f&&f.toLowerCase().includes(vl)).slice(0,4)
+                .map(f=>({ label:f, type:"family", family:f }));
+            setSuggestions([...famHits,...spHits].slice(0,8));
+        }
+
+        function selectSuggestion(s) {
+            const fam = s.family;
+            setQuery(s.label); setSuggestions([]);
+            const info = lookupFamily(fam);
+            setPicked({ family:fam, ...info, sp: s.type==="species" ? s.sp : null });
+        }
+
+        // SVG clade tree render
+        function CladeTree({ data }) {
+            const { family, clade, superorder, order, sp } = data;
+            const famSpecies = speciesInFamily(family);
+            const orderSpecies = speciesInOrder(order);
+            const orderFamilies = [...new Set(orderSpecies.map(s=>s.f))];
+
+            const W = 680, H = 320;
+            const cladeColor = { "Eudicots":"#0B3C5D","Monocots":"#1B6FB5","Gymnosperms":"#4A6274","Basal angiosperms":"#2E7D52","Unknown":"#888" };
+            const col = cladeColor[clade] || "#555";
+
+            // simple dendrogram: Angiosperms → Clade → Superorder → Order → Family
+            const levels = [
+                { label:"Angiosperms", x:40, y:H/2 },
+                { label: clade, x:160, y:H/2 },
+                { label: superorder||clade, x:290, y:H/2 },
+                { label: order, x:420, y:H/2 },
+                { label: family, x:560, y:H/2, focal:true },
+            ];
+
+            const siblings = orderFamilies.filter(f=>f!==family).slice(0,4);
+            const sibNodes = siblings.map((f,i) => ({
+                label:f, x:560,
+                y: H/2 + (i - (siblings.length-1)/2) * 44
+            }));
+
+            const allNodes = [...levels, ...sibNodes];
+            const E = React.createElement;
+
+            return E("svg", { viewBox:`0 0 ${W} ${H}`, width:"100%", style:{ fontFamily:"'Source Sans 3',sans-serif" } },
+                // backbone lines
+                levels.slice(0,-1).map((n,i) =>
+                    E("line",{key:"bl"+i, x1:n.x+n.label.length*4.2, y1:n.y, x2:levels[i+1].x-6, y2:levels[i+1].y, stroke:"#C8D5E0", strokeWidth:1.5})
+                ),
+                // sibling branch lines from order node to siblings
+                sibNodes.map((sn,i) =>
+                    E("line",{key:"sl"+i, x1:levels[3].x+levels[3].label.length*4.2, y1:levels[3].y, x2:sn.x-6, y2:sn.y, stroke:"#E3E8EE", strokeWidth:1.2, strokeDasharray:"3,3"})
+                ),
+                // main nodes
+                allNodes.map((n,i) =>
+                    E("g", { key:"n"+i, transform:`translate(${n.x},${n.y})` },
+                        E("rect",{ x:-4, y:-12, width: n.label.length*7.5+8, height:24, rx:4,
+                            fill: n.focal ? col : i<sibNodes.length+levels.length && i<levels.length ? "#F4F7FA" : "#F8F9FA",
+                            stroke: n.focal ? col : "#C8D5E0", strokeWidth: n.focal?0:1 }),
+                        E("text",{ x:(n.label.length*7.5+8)/2-4, y:5, textAnchor:"middle",
+                            fill: n.focal ? "#fff" : i<5?"#0F172A":"#4A6274",
+                            fontSize: n.focal ? 13 : 12, fontWeight: n.focal ? 700 : 400,
+                            fontStyle: n.focal ? "italic" : "normal" }, n.label)
+                    )
+                ),
+                // level labels below
+                E("g", null,
+                    levels.map((n,i)=>
+                        E("text",{key:"lbl"+i, x:n.x, y:H-14, fontSize:9, fill:"#9CA3AF", fontStyle:"normal"}, ["Kingdom","Clade","Superorder","Order","Family"][i]||"")
+                    )
+                )
+            );
+        }
+
+        const E = React.createElement;
+        const famSpecies = picked ? speciesInFamily(picked.family) : [];
+        const orderSpecies = picked ? speciesInOrder(picked.order) : [];
+
+        return E("div", { style:{ padding:"40px 48px", maxWidth:1200, margin:"0 auto" } },
+            E("p", { style:{ color:pal.muted, fontSize:14, marginTop:0, marginBottom:28, maxWidth:640 } },
+                "Search a species or family to see its position in the APG IV angiosperm classification — clade, superorder, order, and related families in the same order."),
+            // search
+            E("div", { style:{ position:"relative", marginBottom:32 } },
+                E("div", { style:{ display:"flex", gap:8, maxWidth:500 } },
+                    E("input", { value:query, onChange:e=>onQueryChange(e.target.value),
+                        placeholder:"Search species or family (e.g. Lamiaceae, Moringa)…",
+                        style:{ flex:1, padding:"10px 14px", borderRadius:6, border:`1px solid ${pal.rule}`, fontFamily:"inherit", fontSize:14 }
+                    })
+                ),
+                suggestions.length > 0 && E("div", { style:{ position:"absolute", top:42, left:0, background:"#fff", border:`1px solid ${pal.rule}`, borderRadius:6, boxShadow:"0 4px 12px rgba(0,0,0,.1)", zIndex:99, minWidth:420 } },
+                    suggestions.map((s,i) => E("div", { key:i, onClick:()=>selectSuggestion(s),
+                        style:{ padding:"10px 16px", cursor:"pointer", fontSize:13, borderBottom:i<suggestions.length-1?`1px solid ${pal.rule}`:"none",
+                            display:"flex", gap:10, alignItems:"center" } },
+                        E("span", { style:{ fontSize:10, letterSpacing:1, padding:"2px 6px", borderRadius:3,
+                            background: s.type==="family" ? pal.forest : "#1B6FB5", color:"#fff", fontWeight:600, textTransform:"uppercase" }
+                        }, s.type),
+                        E("span", { style:{ fontStyle: s.type==="species"?"italic":"normal" } }, s.label),
+                        s.sublabel && E("span", { style:{ color:pal.muted, fontSize:12 } }, s.sublabel)
+                    ))
+                )
+            ),
+            !picked && E("div", { style:{ textAlign:"center", padding:"80px 0", color:pal.muted, fontSize:14 } },
+                E("div", { style:{ fontSize:48, marginBottom:16 } }, "🌿"),
+                E("div", null, "Search a species or family to display its APG IV phylogenetic position.")
+            ),
+            picked && E("div", null,
+                // clade tree
+                E("div", { style:{ background:"#fff", borderRadius:8, border:`1px solid ${pal.rule}`, padding:24, marginBottom:24 } },
+                    E("div", { style:{ fontSize:11, letterSpacing:2, color:pal.muted, textTransform:"uppercase", marginBottom:16 } }, "APG IV Classification — "+picked.family),
+                    E(CladeTree, { data: picked }),
+                    E("div", { style:{ fontSize:12, color:pal.muted, marginTop:12 } },
+                        `Dashed lines show other families in the order ${picked.order}. Click a species below to open its record.`)
+                ),
+                // stats row
+                E("div", { style:{ display:"flex", gap:16, marginBottom:24 } },
+                    [
+                        ["Clade", picked.clade],
+                        ["Superorder", picked.superorder || "—"],
+                        ["Order", picked.order],
+                        ["Family", picked.family],
+                        ["Species in DB", famSpecies.length],
+                        ["Order total", orderSpecies.length],
+                    ].map(([k,v]) => E("div",{key:k,style:{flex:1,background:"#fff",border:`1px solid ${pal.rule}`,borderRadius:8,padding:"14px 16px"}},
+                        E("div",{style:{fontSize:10,letterSpacing:2,color:pal.muted,textTransform:"uppercase",marginBottom:4}},k),
+                        E("div",{style:{fontSize:16,fontWeight:600,color:pal.forest}},String(v))
+                    ))
+                ),
+                // species list
+                E("div", { style:{ background:"#fff", borderRadius:8, border:`1px solid ${pal.rule}`, overflow:"hidden" } },
+                    E("div", { style:{ padding:"14px 20px", borderBottom:`1px solid ${pal.rule}`, fontWeight:600, fontSize:13 } },
+                        `Species in ${picked.family} (${famSpecies.length})`),
+                    E("div", { style:{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))" } },
+                        famSpecies.slice(0,60).map(sp =>
+                            E("div", { key:sp.sl, onClick:()=>navigate("/species/"+sp.sl),
+                                style:{ padding:"10px 20px", borderBottom:`1px solid ${pal.rule}`, cursor:"pointer", fontSize:13 } },
+                                E("div", { style:{ fontStyle:"italic", color:pal.forest } }, sp.s),
+                                sp.n && E("div", { style:{ fontSize:12, color:pal.muted } }, sp.n)
+                            )
+                        ),
+                        famSpecies.length > 60 && E("div",{style:{padding:"10px 20px",fontSize:12,color:pal.muted}},`… and ${famSpecies.length-60} more`)
+                    )
+                )
+            )
+        )
+    }
+
     const ba = document.getElementById("root"),
         wa = ReactDOM.createRoot(ba);
     wa.render(React.createElement(W, null));
