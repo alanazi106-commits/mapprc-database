@@ -7085,22 +7085,18 @@
             return { nodes, links };
         }
 
-        function parseCompounds(text) {
-            if (!text) return [];
-            return text.split(/[;,]/).map(s => s.trim()).filter(s => s.length > 2 && s.length < 60);
-        }
-
         // suggestions for search autocomplete
         const [suggestions, setSuggestions] = React.useState([]);
         function onQueryChange(v) {
             setQuery(v);
             if (v.length < 2) { setSuggestions([]); return; }
             const vl = v.toLowerCase();
-            const spHits = SPECIES.filter(s => s.s.toLowerCase().includes(vl) || (s.n||"").toLowerCase().includes(vl)).slice(0,5).map(s=>({label:s.s,type:"species",sp:s}));
+            const spHits = B.filter(s => s.s.toLowerCase().includes(vl)).slice(0,5).map(s=>({label:s.s,type:"species",sp:s}));
             // compound hits — scan up to 500 species
             const cpSet = new Set();
-            for (let i = 0; i < Math.min(500, SPECIES.length); i++) {
-                parseCompounds(SPECIES[i].phytochemistry||"").forEach(c => { if (c.toLowerCase().includes(vl)) cpSet.add(c); });
+            for (let i = 0; i < Math.min(500, B.length); i++) {
+                const cps = (B[i].chem && B[i].chem.c) ? B[i].chem.c : [];
+                cps.forEach(c => { if (c && c.toLowerCase().includes(vl)) cpSet.add(c); });
             }
             const cpHits = [...cpSet].slice(0,4).map(c=>({label:c,type:"compound"}));
             setSuggestions([...spHits,...cpHits]);
@@ -7363,19 +7359,19 @@
         function lookupFamily(fam) { return APG[fam] || { clade:"Unknown", superorder:"Unknown", order:"Unknown" }; }
 
         // get all species in same family
-        function speciesInFamily(fam) { return SPECIES.filter(s => s.f === fam); }
+        function speciesInFamily(fam) { return B.filter(s => s.f === fam); }
         // get all species in same order
-        function speciesInOrder(order) { return SPECIES.filter(s => APG[s.f] && APG[s.f].order === order); }
+        function speciesInOrder(order) { return B.filter(s => APG[s.f] && APG[s.f].order === order); }
 
         function onQueryChange(v) {
             setQuery(v);
             if (v.length < 2) { setSuggestions([]); return; }
             const vl = v.toLowerCase();
             // species hits
-            const spHits = SPECIES.filter(s => s.s.toLowerCase().includes(vl)||(s.f||"").toLowerCase().includes(vl)).slice(0,8)
+            const spHits = B.filter(s => s.s.toLowerCase().includes(vl)||(s.f||"").toLowerCase().includes(vl)).slice(0,8)
                 .map(s=>({ label:s.s, sublabel:s.f, type:"species", sp:s, family:s.f }));
             // direct family hits
-            const famHits = [...new Set(SPECIES.map(s=>s.f))].filter(f=>f&&f.toLowerCase().includes(vl)).slice(0,4)
+            const famHits = [...new Set(B.map(s=>s.f))].filter(f=>f&&f.toLowerCase().includes(vl)).slice(0,4)
                 .map(f=>({ label:f, type:"family", family:f }));
             setSuggestions([...famHits,...spHits].slice(0,8));
         }
@@ -7457,9 +7453,13 @@
             E("div", { style:{ position:"relative", marginBottom:32 } },
                 E("div", { style:{ display:"flex", gap:8, maxWidth:500 } },
                     E("input", { value:query, onChange:e=>onQueryChange(e.target.value),
+                        onKeyDown:e=>{ if(e.key==="Enter"&&suggestions.length) selectSuggestion(suggestions[0]); },
                         placeholder:"Search species or family (e.g. Lamiaceae, Moringa)…",
                         style:{ flex:1, padding:"10px 14px", borderRadius:6, border:`1px solid ${pal.rule}`, fontFamily:"inherit", fontSize:14 }
-                    })
+                    }),
+                    E("button", { onClick:()=>{ if(suggestions.length) selectSuggestion(suggestions[0]); },
+                        style:{ padding:"10px 20px", borderRadius:6, border:"none", background:pal.forest, color:"#fff", fontFamily:"inherit", fontSize:14, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap" }
+                    }, "Search")
                 ),
                 suggestions.length > 0 && E("div", { style:{ position:"absolute", top:42, left:0, background:"#fff", border:`1px solid ${pal.rule}`, borderRadius:6, boxShadow:"0 4px 12px rgba(0,0,0,.1)", zIndex:99, minWidth:420 } },
                     suggestions.map((s,i) => E("div", { key:i, onClick:()=>selectSuggestion(s),
@@ -7508,7 +7508,7 @@
                             E("div", { key:sp.sl, onClick:()=>navigate("/species/"+sp.sl),
                                 style:{ padding:"10px 20px", borderBottom:`1px solid ${pal.rule}`, cursor:"pointer", fontSize:13 } },
                                 E("div", { style:{ fontStyle:"italic", color:pal.forest } }, sp.s),
-                                sp.n && E("div", { style:{ fontSize:12, color:pal.muted } }, sp.n)
+                                sp.f && E("div", { style:{ fontSize:12, color:pal.muted } }, sp.f)
                             )
                         ),
                         famSpecies.length > 60 && E("div",{style:{padding:"10px 20px",fontSize:12,color:pal.muted}},`… and ${famSpecies.length-60} more`)
