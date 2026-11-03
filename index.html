@@ -7041,7 +7041,7 @@
 
         // build graph data for a focal species
         function buildSpeciesGraph(sp) {
-            const compounds = parseCompounds(sp.phytochemistry || "");
+            const compounds = (sp.chem && sp.chem.c) ? sp.chem.c.filter(c=>c&&c.length>2&&c.length<80) : [];
             if (!compounds.length) return null;
             const nodes = [{ id:"sp:"+sp.sl, label: sp.s, type:"species", sp }];
             const links = [];
@@ -7053,10 +7053,10 @@
             // find 5 related species that share compounds
             const cpArr = [...cpSet];
             let related = [];
-            for (let i = 0; i < SPECIES.length && related.length < 5; i++) {
-                const s2 = SPECIES[i];
+            for (let i = 0; i < B.length && related.length < 5; i++) {
+                const s2 = B[i];
                 if (s2.sl === sp.sl) continue;
-                const s2cp = parseCompounds(s2.phytochemistry || "");
+                const s2cp = (s2.chem && s2.chem.c) ? s2.chem.c.filter(c=>c&&c.length>2&&c.length<80) : [];
                 const shared = s2cp.filter(c => cpSet.has(c));
                 if (shared.length >= 2) related.push({ sp: s2, shared });
             }
@@ -7070,9 +7070,9 @@
         // build graph for a compound
         function buildCompoundGraph(cname) {
             const matches = [];
-            for (let i = 0; i < SPECIES.length && matches.length < 25; i++) {
-                const sp = SPECIES[i];
-                const cps = parseCompounds(sp.phytochemistry || "");
+            for (let i = 0; i < B.length && matches.length < 25; i++) {
+                const sp = B[i];
+                const cps = (sp.chem && sp.chem.c) ? sp.chem.c.filter(c=>c&&c.length>2) : [];
                 if (cps.some(c => c.toLowerCase() === cname.toLowerCase())) matches.push(sp);
             }
             if (!matches.length) return null;
