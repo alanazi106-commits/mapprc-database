@@ -7239,9 +7239,11 @@
 
     // ── TOOL 2 : GENETIC RELATIONSHIPS (APG IV CLADE TREE) ─────────────────────
     function GeneticTreeTool({ pal, navigate }) {
-        const [query, setQuery]  = React.useState("");
-        const [picked, setPicked] = React.useState(null); // {family, order, clade, superorder}
-        const [suggestions, setSuggestions] = React.useState([]);
+        // ── state ──────────────────────────────────────────────────────────────
+        const [query, setQuery]       = React.useState("");
+        const [suggestions, setSugg]  = React.useState([]);
+        const [compared, setCompared] = React.useState([]);
+        const [hovSeg, setHovSeg]     = React.useState(null);
 
         // APG IV classification map for families present in Saudi flora
         const APG = {
@@ -7374,326 +7376,301 @@
 
         function lookupFamily(fam) { return APG[fam] || { clade:"Unknown", superorder:"Unknown", order:"Unknown" }; }
         function speciesInFamily(fam) { return B.filter(s => s.f === fam); }
-        function speciesInOrder(order) { return B.filter(s => APG[s.f] && APG[s.f].order === order); }
 
-        // ── Build the full circular phylogenetic tree ─────────────────────────
-        // Collect all families present in the DB, group by clade→order→family
-        const CLADE_COLOR = {
-            "Gymnosperms":       "#5C6E7A",
-            "Basal angiosperms": "#2E7D52",
-            "Monocots":          "#1565C0",
-            "Eudicots":          "#0B3C5D",
-            "Unknown":           "#999",
-        };
-        const SUPERORDER_SHADE = {
-            // Monocots
-            "Lilioids":       "#1976D2","Commelinids":  "#1E88E5","Alismatids":   "#42A5F5",
-            // Eudicots rosids
-            "Rosids":         "#0B3C5D",
-            // Eudicots asterids
-            "Asterids":       "#1B6FB5",
-            // Eudicots core
-            "Core eudicots":  "#2E5C8A",
-            "Basal eudicots": "#3D7098",
-            // others
-            "Conifers":       "#607D8B","Gnetales":      "#78909C",
-            "":               "#888",
-        };
+        // ── Marker definitions (chloroplast-style) ────────────────────────────
+        // Each marker = a segment on the ring.  We show 5 barcode markers + 4 APG
+        // metadata bands (habit, family, order, clade) so each species ring carries
+        // 9 segments of equal angular width — exactly like the Commiphora figure.
+        const SEGMENTS = [
+            // DNA barcode markers (real accessions from barc.m)
+            { key:"rbcL",      label:"rbcL",       cat:"Plastid — large subunit",    col:"#2E7D32" },
+            { key:"matK",      label:"matK",        cat:"Plastid — maturase K",       col:"#1565C0" },
+            { key:"ITS",       label:"ITS / ITS2",  cat:"Nuclear ribosomal",          col:"#6A1B9A" },
+            { key:"trnH-psbA", label:"trnH-psbA",   cat:"Plastid — tRNA / psbA",      col:"#E65100" },
+            { key:"ITS2",      label:"ITS2",         cat:"Nuclear ribosomal",          col:"#880E4F" },
+            // Taxonomic / metadata bands
+            { key:"__habit",   label:"Growth form",  cat:"Morphology",                col:"#37474F" },
+            { key:"__family",  label:"Family",       cat:"APG IV — Family",            col:"#4A6274" },
+            { key:"__order",   label:"Order",        cat:"APG IV — Order",             col:"#0B3C5D" },
+            { key:"__clade",   label:"Clade",        cat:"APG IV — Clade",             col:"#1B6FB5" },
+        ];
+        const N_SEG = SEGMENTS.length; // 9
+        const SEG_ANG = (2 * Math.PI) / N_SEG;
 
-        function buildPhyloTree() {
-            // gather all families present in the database that have APG classification
-            const dbFamilies = new Set(B.map(s=>s.f).filter(Boolean));
-            // group: clade → order → [families]
-            const tree = {};
-            dbFamilies.forEach(fam => {
-                const info = APG[fam];
-                if (!info || info.clade === "Unknown") return;
-                const c = info.clade, o = info.order;
-                if (!tree[c]) tree[c] = {};
-                if (!tree[c][o]) tree[c][o] = [];
-                if (!tree[c][o].includes(fam)) tree[c][o].push(fam);
-            });
-            return tree;
+        // Species ring colors (up to 4 compared species)
+        const SP_COLORS = ["#0B3C5D","#C62828","#2E7D32","#6A1B9A"];
+
+        // Get display value for a segment key given a species record
+        function segValue(sp, key) {
+            if (key === "__habit")  return sp.h || "—";
+            if (key === "__family") return sp.f || "—";
+            if (key === "__order")  { const i = lookupFamily(sp.f); return i.order || "—"; }
+            if (key === "__clade")  { const i = lookupFamily(sp.f); return i.clade || "—"; }
+            // barcode marker
+            const m = sp.barc && sp.barc.m ? sp.barc.m : {};
+            return m[key] || null; // null = absent
         }
 
-        // Circular phylogenetic SVG — draws all families in a radial layout
-        function CircularPhyloTree({ focusFamily, onFamilyClick }) {
-            const tree = React.useMemo(buildPhyloTree, []);
-            const svgRef = React.useRef(null);
+        // ── Chloroplast-comparison SVG ────────────────────────────────────────
+        function ComparisonRing({ species, onRemove }) {
             const [zoom, setZoom] = React.useState(1);
-            const [pan, setPan] = React.useState({x:0,y:0});
-            const [dragging, setDragging] = React.useState(null);
-            const [tooltip, setTooltip] = React.useState(null);
+            const [pan, setPan]   = React.useState({x:0,y:0});
+            const [drag, setDrag] = React.useState(null);
+            const E = React.createElement;
 
-            const R_INNER = 80, R_ORDER = 160, R_FAMILY = 260, R_LABEL = 290;
-            const CX = 380, CY = 380, W = 760, H = 760;
+            const CX = 400, CY = 400, W = 800, H = 800;
+            const R_CORE   = 72;   // centre white circle
+            const R_STEP   = 48;   // radial thickness per species ring
+            const R_LABEL  = R_CORE + species.length * R_STEP + 18;
+            const GAP_ANG  = 0.012; // gap between segments (radians)
 
-            // flatten into ordered leaf list: clade → order → family
-            const clades = Object.keys(tree).sort();
-            const leaves = []; // {fam, order, clade, superorder, angle}
-            clades.forEach(c => {
-                const orders = Object.keys(tree[c]).sort();
-                orders.forEach(o => {
-                    tree[c][o].sort().forEach(fam => {
-                        const info = APG[fam];
-                        leaves.push({ fam, order:o, clade:c, superorder: info ? (info.superorder||"") : "" });
-                    });
+            function polar(r, a) { return [CX + r*Math.cos(a), CY + r*Math.sin(a)]; }
+
+            function arcSlice(r0, r1, a0, a1, col, opacity=1) {
+                // filled donut sector
+                const ag0 = a0 + GAP_ANG, ag1 = a1 - GAP_ANG;
+                const [ox0,oy0] = polar(r0,ag0), [ox1,oy1] = polar(r0,ag1);
+                const [ix0,iy0] = polar(r1,ag0), [ix1,iy1] = polar(r1,ag1);
+                const large = (ag1-ag0) > Math.PI ? 1 : 0;
+                const d = `M${ox0},${oy0} A${r0},${r0} 0 ${large} 1 ${ox1},${oy1}
+                           L${ix1},${iy1} A${r1},${r1} 0 ${large} 0 ${ix0},${iy0} Z`;
+                return { d, col, opacity };
+            }
+
+            // Build all slices
+            const slices = []; // {d, col, opacity, spIdx, segIdx, sp, seg, val}
+            species.forEach((sp, si) => {
+                const r0 = R_CORE + si * R_STEP;
+                const r1 = r0 + R_STEP - 2;
+                SEGMENTS.forEach((seg, gi) => {
+                    const a0 = -Math.PI/2 + gi * SEG_ANG;
+                    const a1 = a0 + SEG_ANG;
+                    const val = segValue(sp, seg.key);
+                    const present = val && val !== "—";
+                    const s = arcSlice(r1, r0, a0, a1, seg.col, present ? 0.88 : 0.12);
+                    slices.push({ ...s, spIdx:si, segIdx:gi, sp, seg, val });
                 });
             });
 
-            const N = leaves.length;
-            const angleStep = (2 * Math.PI) / N;
-            leaves.forEach((l,i) => { l.angle = -Math.PI/2 + i * angleStep; });
+            // Outer segment labels (gene/marker names) at R_LABEL
+            const outerLabels = SEGMENTS.map((seg, gi) => {
+                const midA = -Math.PI/2 + (gi + 0.5) * SEG_ANG;
+                const [lx,ly] = polar(R_LABEL, midA);
+                const deg = midA * 180/Math.PI;
+                const flip = deg > 90 || deg < -90;
+                return { seg, lx, ly, deg, flip };
+            });
 
-            // group angle spans for clades and orders
-            function groupSpans(key) {
-                const spans = {};
-                leaves.forEach((l,i) => {
-                    const k = l[key];
-                    if (!spans[k]) spans[k] = {start:i,end:i};
-                    else spans[k].end = i;
-                });
-                return spans;
-            }
-            const cladeSpans = groupSpans("clade");
-            const orderSpans = groupSpans("order");
+            // Tick marks between segments
+            const ticks = SEGMENTS.map((_, gi) => {
+                const a = -Math.PI/2 + gi * SEG_ANG;
+                const [x1,y1] = polar(R_CORE, a);
+                const [x2,y2] = polar(R_CORE + species.length * R_STEP, a);
+                return { x1,y1,x2,y2 };
+            });
 
-            function polar(r, angle) {
-                return [CX + r * Math.cos(angle), CY + r * Math.sin(angle)];
-            }
-            function midAngle(start, end) {
-                return -Math.PI/2 + (start + end) / 2 * angleStep;
-            }
-            function arcPath(r, startIdx, endIdx) {
-                const a1 = -Math.PI/2 + startIdx * angleStep - angleStep*0.4;
-                const a2 = -Math.PI/2 + endIdx   * angleStep + angleStep*0.4;
-                const [x1,y1] = polar(r, a1), [x2,y2] = polar(r, a2);
-                const large = (a2-a1) > Math.PI ? 1 : 0;
-                return `M ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`;
-            }
+            function onMouseDown(e) { setDrag({x:e.clientX-pan.x,y:e.clientY-pan.y}); }
+            function onMouseMove(e) { if(drag) setPan({x:e.clientX-drag.x,y:e.clientY-drag.y}); }
+            function onMouseUp()    { setDrag(null); }
+            function onWheel(e)     { e.preventDefault(); setZoom(z=>Math.max(0.4,Math.min(3,z-e.deltaY*0.001))); }
 
-            const E = React.createElement;
-
-            // drag-to-pan
-            function onMouseDown(e) {
-                setDragging({x:e.clientX-pan.x, y:e.clientY-pan.y});
-            }
-            function onMouseMove(e) {
-                if (!dragging) return;
-                setPan({x:e.clientX-dragging.x, y:e.clientY-dragging.y});
-            }
-            function onMouseUp() { setDragging(null); }
-            function onWheel(e) {
-                e.preventDefault();
-                setZoom(z => Math.max(0.4, Math.min(3, z - e.deltaY * 0.001)));
-            }
-
-            const transform = `translate(${pan.x},${pan.y}) scale(${zoom})`;
-
-            return E("div", { style:{position:"relative"} },
+            return E("div",{style:{position:"relative"}},
                 // zoom controls
-                E("div", { style:{ position:"absolute", top:12, right:12, zIndex:10, display:"flex", flexDirection:"column", gap:4 } },
-                    E("button", { onClick:()=>setZoom(z=>Math.min(3,z+0.2)),
-                        style:{width:32,height:32,borderRadius:4,border:"1px solid #C8D5E0",background:"#fff",fontSize:18,cursor:"pointer",lineHeight:"1"} }, "+"),
-                    E("button", { onClick:()=>setZoom(z=>Math.max(0.4,z-0.2)),
-                        style:{width:32,height:32,borderRadius:4,border:"1px solid #C8D5E0",background:"#fff",fontSize:18,cursor:"pointer",lineHeight:"1"} }, "−"),
-                    E("button", { onClick:()=>{ setZoom(1); setPan({x:0,y:0}); },
-                        style:{width:32,height:32,borderRadius:4,border:"1px solid #C8D5E0",background:"#fff",fontSize:11,cursor:"pointer"} }, "⌂")
+                E("div",{style:{position:"absolute",top:10,right:10,zIndex:10,display:"flex",flexDirection:"column",gap:4}},
+                    E("button",{onClick:()=>setZoom(z=>Math.min(3,z+0.25)),style:{width:32,height:32,borderRadius:4,border:"1px solid #C8D5E0",background:"#fff",fontSize:18,cursor:"pointer"}},"+"),
+                    E("button",{onClick:()=>setZoom(z=>Math.max(0.4,z-0.25)),style:{width:32,height:32,borderRadius:4,border:"1px solid #C8D5E0",background:"#fff",fontSize:18,cursor:"pointer"}},"−"),
+                    E("button",{onClick:()=>{setZoom(1);setPan({x:0,y:0});},style:{width:32,height:32,borderRadius:4,border:"1px solid #C8D5E0",background:"#fff",fontSize:11,cursor:"pointer"}},"⌂")
                 ),
-                // legend
-                E("div", { style:{ position:"absolute", bottom:12, left:12, zIndex:10, display:"flex", flexDirection:"column", gap:4 } },
-                    Object.entries(CLADE_COLOR).filter(([k])=>k!=="Unknown").map(([clade,col]) =>
-                        E("div",{key:clade,style:{display:"flex",alignItems:"center",gap:6,fontSize:11,color:"#4A6274"}},
-                            E("div",{style:{width:10,height:10,borderRadius:2,background:col}}),
-                            clade
-                        )
+                E("svg",{
+                    viewBox:`0 0 ${W} ${H}`,width:"100%",
+                    style:{display:"block",cursor:drag?"grabbing":"grab",fontFamily:"'Source Sans 3',sans-serif",userSelect:"none"},
+                    onMouseDown,onMouseMove,onMouseUp,onMouseLeave:onMouseUp,onWheel,
+                },
+                    E("g",{transform:`translate(${pan.x},${pan.y}) scale(${zoom})`},
+                        // background
+                        E("circle",{cx:CX,cy:CY,r:R_CORE+species.length*R_STEP+60,fill:"#F8FAFC",stroke:"#E3E8EE",strokeWidth:1}),
+                        // slices
+                        slices.map((s,i)=>
+                            E("path",{key:"s"+i, d:s.d, fill:s.col, opacity:s.opacity,
+                                style:{cursor:"pointer",transition:"opacity .1s"},
+                                onMouseEnter:e=>setHovSeg({sp:s.sp,seg:s.seg,val:s.val,present:s.opacity>0.5,x:e.clientX,y:e.clientY}),
+                                onMouseLeave:()=>setHovSeg(null),
+                                onClick:()=>s.val&&s.val!=="—"&&s.seg.key.startsWith("__")?null:
+                                    s.val&&window.open(`https://www.ncbi.nlm.nih.gov/nuccore/${s.val}`,"_blank")
+                            })
+                        ),
+                        // tick lines between segments
+                        ticks.map((t,i)=>E("line",{key:"t"+i,...t,stroke:"#fff",strokeWidth:1.5})),
+                        // ring labels for each species (concentric arc)
+                        species.map((sp,si)=>{
+                            const rm = R_CORE + si * R_STEP + R_STEP/2;
+                            // place label at rightmost point
+                            const [lx,ly] = polar(rm, Math.PI/6);
+                            return E("text",{key:"rl"+si,
+                                x:lx,y:ly,fontSize:9,fontWeight:700,fill:SP_COLORS[si],
+                                textAnchor:"start",dominantBaseline:"middle"
+                            }, `S${si+1}`);
+                        }),
+                        // outer segment labels
+                        outerLabels.map(({seg,lx,ly,deg,flip},i)=>
+                            E("text",{key:"ol"+i,x:lx,y:ly,fontSize:10,fontWeight:600,
+                                fill:seg.col,textAnchor:"middle",
+                                transform:`rotate(${flip?deg+180:deg},${lx},${ly})`
+                            }, seg.label)
+                        ),
+                        // centre: species names
+                        E("circle",{cx:CX,cy:CY,r:R_CORE-4,fill:"#fff",stroke:"#E3E8EE",strokeWidth:1}),
+                        species.map((sp,si)=>
+                            E("text",{key:"cn"+si,x:CX,y:CY-10+(si*14),textAnchor:"middle",
+                                fontSize:si===0?11:9,fontStyle:"italic",fontWeight:si===0?700:400,
+                                fill:SP_COLORS[si]
+                            }, sp.s.length>20?sp.s.slice(0,19)+"…":sp.s)
+                        ),
                     )
                 ),
-                E("svg", {
-                    ref: svgRef,
-                    viewBox:`0 0 ${W} ${H}`,
-                    width:"100%",
-                    style:{ display:"block", cursor: dragging?"grabbing":"grab", fontFamily:"'Source Sans 3',sans-serif", userSelect:"none" },
-                    onMouseDown, onMouseMove, onMouseUp, onMouseLeave: onMouseUp,
-                    onWheel,
-                },
-                    E("g", { transform },
-                        // ── Clade arcs (outermost ring) ──
-                        Object.entries(cladeSpans).map(([clade,{start,end}]) => {
-                            const col = CLADE_COLOR[clade] || "#888";
-                            return E("path",{ key:"ca"+clade, d:arcPath(R_ORDER+28, start, end),
-                                fill:"none", stroke:col, strokeWidth:10, opacity:0.35 });
-                        }),
-                        // ── Order arcs (middle ring) ──
-                        Object.entries(orderSpans).map(([order,{start,end}]) => {
-                            const clade = leaves[start].clade;
-                            const col = CLADE_COLOR[clade] || "#888";
-                            return E("path",{ key:"oa"+order, d:arcPath(R_ORDER-2, start, end),
-                                fill:"none", stroke:col, strokeWidth:6, opacity:0.5 });
-                        }),
-                        // ── Radial lines from center to family dots ──
-                        leaves.map((l,i) => {
-                            const col = CLADE_COLOR[l.clade] || "#888";
-                            const [x1,y1] = polar(R_INNER, l.angle);
-                            const [x2,y2] = polar(R_FAMILY-8, l.angle);
-                            const isFocus = l.fam === focusFamily;
-                            return E("line",{ key:"rl"+i, x1,y1,x2,y2,
-                                stroke: isFocus ? "#E53E3E" : col,
-                                strokeWidth: isFocus ? 2.5 : 0.8,
-                                opacity: isFocus ? 1 : 0.5 });
-                        }),
-                        // ── Family dots ──
-                        leaves.map((l,i) => {
-                            const [cx,cy] = polar(R_FAMILY, l.angle);
-                            const col = CLADE_COLOR[l.clade] || "#888";
-                            const isFocus = l.fam === focusFamily;
-                            const spCount = speciesInFamily(l.fam).length;
-                            const r = isFocus ? 9 : Math.max(3, Math.min(7, 2 + spCount * 0.08));
-                            return E("circle",{ key:"fd"+i, cx, cy, r,
-                                fill: isFocus ? "#E53E3E" : col,
-                                stroke: isFocus ? "#fff" : "none",
-                                strokeWidth: isFocus ? 2 : 0,
-                                opacity: isFocus ? 1 : 0.75,
-                                style:{ cursor:"pointer", transition:"r 0.15s" },
-                                onClick: e => { e.stopPropagation(); onFamilyClick(l.fam); },
-                                onMouseEnter: e => setTooltip({ fam:l.fam, order:l.order, clade:l.clade, count:spCount, x:e.clientX, y:e.clientY }),
-                                onMouseLeave: () => setTooltip(null)
-                            });
-                        }),
-                        // ── Family labels for focused family + hover ──
-                        leaves.filter(l => l.fam === focusFamily).map((l,i) => {
-                            const [lx,ly] = polar(R_LABEL+10, l.angle);
-                            const deg = l.angle * 180/Math.PI;
-                            const flip = (deg > 90 || deg < -90);
-                            return E("text",{ key:"flbl"+i, x:lx, y:ly,
-                                textAnchor: flip?"end":"start",
-                                transform:`rotate(${flip?deg+180:deg},${lx},${ly})`,
-                                fontSize:12, fontWeight:700, fill:"#E53E3E" }, l.fam);
-                        }),
-                        // ── Clade labels at mid-arc ──
-                        Object.entries(cladeSpans).map(([clade,{start,end}]) => {
-                            const mid = midAngle(start, end);
-                            const [lx,ly] = polar(R_ORDER+48, mid);
-                            const deg = mid * 180/Math.PI;
-                            const flip = (deg > 90 || deg < -90);
-                            return E("text",{ key:"cl"+clade, x:lx, y:ly,
-                                textAnchor:"middle",
-                                transform:`rotate(${flip?deg+180:deg},${lx},${ly})`,
-                                fontSize:10, fontWeight:700, letterSpacing:1,
-                                fill: CLADE_COLOR[clade]||"#888", opacity:0.8,
-                                style:{textTransform:"uppercase"} }, clade);
-                        }),
-                        // ── Centre label ──
-                        E("text",{x:CX,y:CY-10,textAnchor:"middle",fontSize:13,fontWeight:700,fill:"#0B3C5D"},"Saudi Flora"),
-                        E("text",{x:CX,y:CY+8,textAnchor:"middle",fontSize:11,fill:"#6B7280"},`${N} families · APG IV`),
-                    )
-                ),
-                // ── Tooltip ──
-                tooltip && E("div", {
-                    style:{ position:"fixed", left:tooltip.x+12, top:tooltip.y-8, background:"#0F172A", color:"#fff",
-                        padding:"8px 12px", borderRadius:6, fontSize:12, pointerEvents:"none", zIndex:9999,
-                        boxShadow:"0 4px 12px rgba(0,0,0,.3)", maxWidth:200, lineHeight:1.5 }
-                },
-                    E("div",{style:{fontStyle:"italic",fontWeight:600,marginBottom:2}}, tooltip.fam),
-                    E("div",{style:{color:"#94A3B8"}}, tooltip.order),
-                    E("div",{style:{color:"#94A3B8"}}, tooltip.clade),
-                    E("div",{style:{color:"#38BDF8",marginTop:2}}, `${tooltip.count} species in DB`)
+                // Hover tooltip
+                hovSeg && E("div",{style:{
+                    position:"fixed",left:hovSeg.x+14,top:hovSeg.y-10,
+                    background:"#0F172A",color:"#fff",padding:"10px 14px",
+                    borderRadius:8,fontSize:12,pointerEvents:"none",zIndex:9999,
+                    boxShadow:"0 4px 16px rgba(0,0,0,.35)",maxWidth:260,lineHeight:1.6
+                }},
+                    E("div",{style:{fontStyle:"italic",fontWeight:700,marginBottom:2}},hovSeg.sp.s),
+                    E("div",{style:{color:"#94A3B8",marginBottom:4}},hovSeg.seg.cat),
+                    E("div",{style:{fontWeight:600,color:hovSeg.present?"#38BDF8":"#4B5563"}},
+                        hovSeg.val && hovSeg.val!=="—" ? hovSeg.val : "Not available"),
+                    hovSeg.present && !hovSeg.seg.key.startsWith("__") &&
+                        E("div",{style:{color:"#6EE7B7",fontSize:11,marginTop:4}},"Click to open in NCBI ↗")
                 )
             );
         }
 
+        // ── Search autocomplete ───────────────────────────────────────────────
         function onQueryChange(v) {
             setQuery(v);
-            if (v.length < 2) { setSuggestions([]); return; }
+            if (v.length < 2) { setSugg([]); return; }
             const vl = v.toLowerCase();
-            const spHits = B.filter(s => s.s.toLowerCase().includes(vl)||(s.f||"").toLowerCase().includes(vl)).slice(0,8)
-                .map(s=>({ label:s.s, sublabel:s.f, type:"species", sp:s, family:s.f }));
-            const famHits = [...new Set(B.map(s=>s.f))].filter(f=>f&&f.toLowerCase().includes(vl)).slice(0,4)
-                .map(f=>({ label:f, type:"family", family:f }));
-            setSuggestions([...famHits,...spHits].slice(0,8));
+            const hits = B.filter(s => s.s.toLowerCase().includes(vl)||(s.f||"").toLowerCase().includes(vl))
+                .slice(0,10).map(s=>({ label:s.s, sub:s.f, sp:s }));
+            setSugg(hits);
         }
 
-        function selectSuggestion(s) {
-            const fam = s.family;
-            setQuery(s.label); setSuggestions([]);
-            const info = lookupFamily(fam);
-            setPicked({ family:fam, ...info, sp: s.type==="species" ? s.sp : null });
+        function addSpecies(sp) {
+            if (compared.find(x=>x.sl===sp.sl)) return;
+            if (compared.length >= 4) return;
+            setCompared(c=>[...c,sp]);
+            setQuery(""); setSugg([]);
         }
+
+        function removeSpecies(sl) { setCompared(c=>c.filter(x=>x.sl!==sl)); }
 
         const E = React.createElement;
-        const famSpecies = picked ? speciesInFamily(picked.family) : [];
-        const orderSpecies = picked ? speciesInOrder(picked.order) : [];
 
-        return E("div", { style:{ padding:"32px 48px", maxWidth:1300, margin:"0 auto" } },
-            E("p", { style:{ color:pal.muted, fontSize:14, marginTop:0, marginBottom:20, maxWidth:700 } },
-                "Circular APG IV phylogenetic tree of all Saudi flora families. Dot size = species count. Click any dot or search a species/family to highlight it. Scroll to zoom, drag to pan."),
-            // search
-            E("div", { style:{ position:"relative", marginBottom:24 } },
-                E("div", { style:{ display:"flex", gap:8, maxWidth:500 } },
+        // ── Legend (right panel) ─────────────────────────────────────────────
+        function Legend({ species }) {
+            return E("div",{style:{display:"flex",flexDirection:"column",gap:20}},
+                E("div",{style:{background:"#fff",borderRadius:8,border:`1px solid ${pal.rule}`,padding:16}},
+                    E("div",{style:{fontSize:10,letterSpacing:2,color:pal.muted,textTransform:"uppercase",marginBottom:10}},"Compared species"),
+                    species.map((sp,si)=>
+                        E("div",{key:sp.sl,style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}},
+                            E("div",{style:{display:"flex",alignItems:"center",gap:8}},
+                                E("div",{style:{width:12,height:12,borderRadius:3,background:SP_COLORS[si],flexShrink:0}}),
+                                E("div",{},
+                                    E("div",{style:{fontStyle:"italic",fontSize:12,fontWeight:600,color:pal.forest}},sp.s),
+                                    E("div",{style:{fontSize:11,color:pal.muted}},sp.f)
+                                )
+                            ),
+                            E("button",{onClick:()=>removeSpecies(sp.sl),
+                                style:{background:"none",border:"none",color:"#9CA3AF",cursor:"pointer",fontSize:16,padding:"0 4px",lineHeight:1}},"×")
+                        )
+                    ),
+                    species.length < 4 && E("div",{style:{fontSize:11,color:pal.muted,marginTop:4}},
+                        `Add up to ${4-species.length} more species using the search above.`)
+                ),
+                E("div",{style:{background:"#fff",borderRadius:8,border:`1px solid ${pal.rule}`,padding:16}},
+                    E("div",{style:{fontSize:10,letterSpacing:2,color:pal.muted,textTransform:"uppercase",marginBottom:10}},"Ring segments"),
+                    SEGMENTS.map(seg=>
+                        E("div",{key:seg.key,style:{display:"flex",alignItems:"center",gap:8,marginBottom:7}},
+                            E("div",{style:{width:10,height:10,borderRadius:2,background:seg.col,flexShrink:0}}),
+                            E("div",{},
+                                E("div",{style:{fontSize:12,fontWeight:600,color:"#0F172A"}},seg.label),
+                                E("div",{style:{fontSize:10,color:pal.muted}},seg.cat)
+                            )
+                        )
+                    ),
+                    E("div",{style:{fontSize:11,color:pal.muted,marginTop:8,paddingTop:8,borderTop:`1px solid ${pal.rule}`}},
+                        "Bright = marker present · Faded = absent · Click barcode segment → NCBI"
+                    )
+                ),
+                species.length > 0 && E("div",{style:{background:"#fff",borderRadius:8,border:`1px solid ${pal.rule}`,overflow:"hidden"}},
+                    E("div",{style:{padding:"10px 14px",borderBottom:`1px solid ${pal.rule}`,fontWeight:600,fontSize:12}},"Accession numbers"),
+                    E("table",{style:{width:"100%",borderCollapse:"collapse",fontSize:11}},
+                        E("thead",null,
+                            E("tr",{style:{background:"#F4F7FA"}},
+                                E("th",{style:{padding:"6px 10px",textAlign:"left",color:pal.muted,fontWeight:600}},"Species"),
+                                ["rbcL","matK","ITS","trnH-psbA","ITS2"].map(mk=>
+                                    E("th",{key:mk,style:{padding:"6px 8px",textAlign:"center",color:pal.muted,fontWeight:600}},mk)
+                                )
+                            )
+                        ),
+                        E("tbody",null,
+                            species.map((sp,si)=>{
+                                const m = sp.barc && sp.barc.m ? sp.barc.m : {};
+                                return E("tr",{key:sp.sl,style:{borderTop:`1px solid ${pal.rule}`}},
+                                    E("td",{style:{padding:"6px 10px",fontStyle:"italic",color:SP_COLORS[si],fontWeight:600}},
+                                        sp.s.length>18?sp.s.slice(0,17)+"…":sp.s),
+                                    ["rbcL","matK","ITS","trnH-psbA","ITS2"].map(mk=>
+                                        E("td",{key:mk,style:{padding:"6px 8px",textAlign:"center"}},
+                                            m[mk]
+                                                ? E("a",{href:`https://www.ncbi.nlm.nih.gov/nuccore/${m[mk]}`,target:"_blank",
+                                                    style:{color:"#1565C0",fontSize:10,textDecoration:"none",fontWeight:600}},m[mk])
+                                                : E("span",{style:{color:"#D1D5DB",fontSize:12}},"—")
+                                        )
+                                    )
+                                );
+                            })
+                        )
+                    )
+                )
+            );
+        }
+
+        return E("div", { style:{ padding:"32px 48px", maxWidth:1400, margin:"0 auto" } },
+            E("p", { style:{ color:pal.muted, fontSize:14, marginTop:0, marginBottom:20, maxWidth:800 } },
+                "Compare up to 4 Saudi flora species as concentric genome-style rings. Each ring shows 5 DNA barcode markers (rbcL, matK, ITS, trnH-psbA, ITS2) and 4 APG IV metadata bands. Bright segments = data present. Hover for details; click a barcode segment to open the NCBI accession."),
+            E("div", { style:{ position:"relative", marginBottom:28, maxWidth:520 } },
+                E("div", { style:{ display:"flex", gap:8 } },
                     E("input", { value:query, onChange:e=>onQueryChange(e.target.value),
-                        onKeyDown:e=>{ if(e.key==="Enter"&&suggestions.length) selectSuggestion(suggestions[0]); },
-                        placeholder:"Search species or family (e.g. Lamiaceae, Moringa)…",
+                        onKeyDown:e=>{ if(e.key==="Enter"&&suggestions.length) addSpecies(suggestions[0].sp); },
+                        placeholder:"Search species to add (e.g. Moringa oleifera, Acacia)…",
                         style:{ flex:1, padding:"10px 14px", borderRadius:6, border:`1px solid ${pal.rule}`, fontFamily:"inherit", fontSize:14 }
                     }),
-                    E("button", { onClick:()=>{ if(suggestions.length) selectSuggestion(suggestions[0]); },
+                    E("button", { onClick:()=>{ if(suggestions.length) addSpecies(suggestions[0].sp); },
                         style:{ padding:"10px 20px", borderRadius:6, border:"none", background:pal.forest, color:"#fff", fontFamily:"inherit", fontSize:14, fontWeight:600, cursor:"pointer", whiteSpace:"nowrap" }
-                    }, "Search")
+                    }, compared.length===0?"Add Species":"+ Add")
                 ),
-                suggestions.length > 0 && E("div", { style:{ position:"absolute", top:42, left:0, background:"#fff", border:`1px solid ${pal.rule}`, borderRadius:6, boxShadow:"0 4px 12px rgba(0,0,0,.1)", zIndex:99, minWidth:420 } },
-                    suggestions.map((s,i) => E("div", { key:i, onClick:()=>selectSuggestion(s),
+                suggestions.length > 0 && E("div", { style:{ position:"absolute", top:44, left:0, background:"#fff", border:`1px solid ${pal.rule}`, borderRadius:6, boxShadow:"0 4px 12px rgba(0,0,0,.1)", zIndex:99, minWidth:460 } },
+                    suggestions.map((s,i) => E("div", { key:i, onClick:()=>addSpecies(s.sp),
                         style:{ padding:"10px 16px", cursor:"pointer", fontSize:13, borderBottom:i<suggestions.length-1?`1px solid ${pal.rule}`:"none",
-                            display:"flex", gap:10, alignItems:"center" } },
-                        E("span", { style:{ fontSize:10, letterSpacing:1, padding:"2px 6px", borderRadius:3,
-                            background: s.type==="family" ? pal.forest : "#1B6FB5", color:"#fff", fontWeight:600, textTransform:"uppercase" }
-                        }, s.type),
-                        E("span", { style:{ fontStyle: s.type==="species"?"italic":"normal" } }, s.label),
-                        s.sublabel && E("span", { style:{ color:pal.muted, fontSize:12 } }, s.sublabel)
+                            display:"flex", gap:10, alignItems:"center",
+                            background: compared.find(x=>x.sl===s.sp.sl) ? "#F0FDF4" : "#fff" } },
+                        E("span",{style:{fontStyle:"italic",flex:1}}, s.label),
+                        E("span",{style:{fontSize:11,color:pal.muted}}, s.sub),
+                        compared.find(x=>x.sl===s.sp.sl) && E("span",{style:{fontSize:10,color:"#16A34A",fontWeight:700}},"✓")
                     ))
                 )
             ),
-            // ── Two-column layout: tree left, detail right ──
-            E("div", { style:{ display:"grid", gridTemplateColumns: picked ? "1fr 380px" : "1fr", gap:24, alignItems:"start" } },
-                // circular tree
-                E("div", { style:{ background:"#fff", borderRadius:8, border:`1px solid ${pal.rule}`, overflow:"hidden" } },
-                    E(CircularPhyloTree, {
-                        focusFamily: picked ? picked.family : null,
-                        onFamilyClick: fam => {
-                            const info = lookupFamily(fam);
-                            setQuery(fam);
-                            setPicked({ family:fam, ...info, sp:null });
-                        }
-                    })
+            compared.length === 0 && E("div",{style:{textAlign:"center",padding:"100px 0",color:pal.muted,fontSize:14}},
+                E("div",{style:{fontSize:56,marginBottom:16}},"🧬"),
+                E("div",{style:{fontSize:18,fontWeight:600,color:pal.forest,marginBottom:8}},"Multi-species genome comparison"),
+                E("div",{style:{maxWidth:480,margin:"0 auto",lineHeight:1.6}},
+                    "Search and add species from the Saudi Flora database. Each species appears as a concentric ring showing its barcode markers and APG IV classification — like the chloroplast genome maps in published phylogenetic papers.")
+            ),
+            compared.length > 0 && E("div",{style:{display:"grid",gridTemplateColumns:"1fr 340px",gap:24,alignItems:"start"}},
+                E("div",{style:{background:"#fff",borderRadius:8,border:`1px solid ${pal.rule}`,overflow:"hidden"}},
+                    E(ComparisonRing,{species:compared,onRemove:removeSpecies})
                 ),
-                // detail panel
-                picked && E("div", { style:{ display:"flex", flexDirection:"column", gap:16 } },
-                    // classification card
-                    E("div", { style:{ background:"#fff", borderRadius:8, border:`1px solid ${pal.rule}`, padding:20 } },
-                        E("div", { style:{ fontSize:11, letterSpacing:2, color:pal.muted, textTransform:"uppercase", marginBottom:12 } }, "APG IV Position"),
-                        [["Clade",picked.clade],["Superorder",picked.superorder||"—"],["Order",picked.order],["Family",picked.family]].map(([k,v]) =>
-                            E("div",{key:k,style:{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:`1px solid ${pal.rule}`,fontSize:13}},
-                                E("span",{style:{color:pal.muted}},k),
-                                E("span",{style:{fontWeight:600,color:pal.forest, fontStyle:k==="Family"?"italic":"normal"}},v)
-                            )
-                        ),
-                        E("div",{style:{display:"flex",justifyContent:"space-between",padding:"6px 0",fontSize:13}},
-                            E("span",{style:{color:pal.muted}},"Species in DB"),
-                            E("span",{style:{fontWeight:600,color:pal.forest}},famSpecies.length)
-                        )
-                    ),
-                    // species list
-                    E("div", { style:{ background:"#fff", borderRadius:8, border:`1px solid ${pal.rule}`, overflow:"hidden", maxHeight:480, overflowY:"auto" } },
-                        E("div", { style:{ padding:"12px 16px", borderBottom:`1px solid ${pal.rule}`, fontWeight:600, fontSize:13, position:"sticky", top:0, background:"#fff" } },
-                            `Species in ${picked.family} (${famSpecies.length})`),
-                        famSpecies.slice(0,80).map(sp =>
-                            E("div", { key:sp.sl, onClick:()=>navigate("/species/"+sp.sl),
-                                style:{ padding:"10px 20px", borderBottom:`1px solid ${pal.rule}`, cursor:"pointer", fontSize:13 } },
-                                E("div", { style:{ fontStyle:"italic", color:pal.forest } }, sp.s),
-                                sp.f && E("div", { style:{ fontSize:12, color:pal.muted } }, sp.f)
-                            )
-                        ),
-                        famSpecies.length > 80 && E("div",{style:{padding:"10px 20px",fontSize:12,color:pal.muted}},`… and ${famSpecies.length-80} more`)
-                    )
-                )
+                E(Legend,{species:compared})
             )
         )
     }
