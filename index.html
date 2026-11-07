@@ -173,20 +173,51 @@
             .replace(new RegExp('\\s*[Ff]lower(?:ing)?\\s+(?:in\\s+)?' + MP + '[^.]*\\.?$', 'gi'), '')
             .trim().replace(/\.+$/, '.');
     }
+    function parseFr(t) {
+        if (!t) return null;
+        var M = {jan:0,january:0,feb:1,february:1,mar:2,march:2,apr:3,april:3,may:4,jun:5,june:5,jul:6,july:6,aug:7,august:7,sep:8,september:8,oct:9,october:9,nov:10,november:10,dec:11,december:11};
+        var MP = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)';
+        var re = new RegExp('[Ff]ruit(?:ing)?\\s+(?:in\\s+)?(' + MP + ')([^.]*)', 'gi');
+        var hits = new Set();
+        var m, r, i;
+        while ((m = re.exec(t)) !== null) {
+            var body = (m[1] + (m[2] || '')).split(/\bflower(?:ing)?\b/i)[0];
+            var rng = /(\w+)\s*[–\-—]\s*(\w+)|(\w+)\s+to\s+(\w+)/gi;
+            while ((r = rng.exec(body)) !== null) {
+                var s1 = M[(r[1]||r[3]||'').toLowerCase()], e1 = M[(r[2]||r[4]||'').toLowerCase()];
+                if (s1 != null && e1 != null) {
+                    if (e1 >= s1) { for (i=s1; i<=e1; i++) hits.add(i); }
+                    else { for (i=s1; i<=11; i++) hits.add(i); for (i=0; i<=e1; i++) hits.add(i); }
+                }
+            }
+            var mo = M[m[1].toLowerCase()];
+            if (mo != null) hits.add(mo);
+        }
+        return hits.size ? hits : null;
+    }
+    function stripFr(t) {
+        if (!t) return t;
+        var MP = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)';
+        return t
+            .replace(new RegExp('[,;]\\s*[Ff]ruit(?:ing)?\\s+(?:in\\s+)?' + MP + '[^.]*\\.', 'gi'), '.')
+            .replace(new RegExp('\\.\\s+[Ff]ruit(?:ing)?\\s+(?:in\\s+)?' + MP + '[^.]*\\.', 'gi'), '.')
+            .replace(new RegExp('\\s*[Ff]ruit(?:ing)?\\s+(?:in\\s+)?' + MP + '[^.]*\\.?$', 'gi'), '')
+            .trim().replace(/\.+$/, '.');
+    }
     function FlBar(p) {
-        var C = p.C, fMono = p.fMono, months = p.months;
+        var C = p.C, fMono = p.fMono, months = p.months, label = p.label || 'Flowering season', barColor = p.barColor || C.terracotta;
         var ML = ['J','F','M','A','M','J','J','A','S','O','N','D'];
         var FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
         return React.createElement('div', {
-            style: { display: 'flex', alignItems: 'flex-start', gap: 12, marginTop: 16, flexWrap: 'wrap' }
+            style: { display: 'flex', alignItems: 'flex-start', gap: 12, marginTop: 10, flexWrap: 'wrap' }
         },
             React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
                 React.createElement('div', { style: { display: 'flex', gap: 2 } },
                     ML.map(function(_, idx) {
                         return React.createElement('div', { key: idx, title: FULL[idx], style: {
                             width: 22, height: 20, borderRadius: 2,
-                            background: months.has(idx) ? C.terracotta : C.paperDeep,
-                            border: '1px solid ' + (months.has(idx) ? C.terracotta : C.rule)
+                            background: months.has(idx) ? barColor : C.paperDeep,
+                            border: '1px solid ' + (months.has(idx) ? barColor : C.rule)
                         }});
                     })
                 ),
@@ -194,7 +225,7 @@
                     ML.map(function(lb, idx) {
                         return React.createElement('div', { key: idx, style: {
                             width: 22, textAlign: 'center', fontFamily: fMono,
-                            fontSize: 9, color: months.has(idx) ? C.terracotta : C.muted,
+                            fontSize: 9, color: months.has(idx) ? barColor : C.muted,
                             fontWeight: months.has(idx) ? 600 : 400
                         }}, lb);
                     })
@@ -203,17 +234,21 @@
             React.createElement('div', { style: {
                 fontFamily: fMono, fontSize: 10, letterSpacing: '0.12em',
                 textTransform: 'uppercase', color: C.muted, marginTop: 2
-            }}, 'Flowering season')
+            }}, label)
         );
     }
     function DescWithFl(p) {
         var fl = parseFl(p.text);
-        var stripped = fl ? stripFl(p.text) : p.text;
+        var fr = parseFr(p.text);
+        var stripped = p.text;
+        if (fl) stripped = stripFl(stripped);
+        if (fr) stripped = stripFr(stripped);
         return React.createElement(React.Fragment, null,
             React.createElement('p', {
                 style: { margin: 0, fontSize: 15.5, lineHeight: 1.7, color: p.C.ink }
             }, stripped),
-            fl ? React.createElement(FlBar, { months: fl, C: p.C, fMono: p.fMono }) : null
+            fl ? React.createElement(FlBar, { months: fl, C: p.C, fMono: p.fMono, label: 'Flowering season', barColor: p.C.terracotta }) : null,
+            fr ? React.createElement(FlBar, { months: fr, C: p.C, fMono: p.fMono, label: 'Fruiting season', barColor: p.C.forest }) : null
         );
     }
     function LrefOld(s) {
@@ -1584,7 +1619,10 @@
             initialScope: l.scope,
             initialPage: l.page,
             initialUses: l.uses,
-            initialSort: l.sort
+            initialSort: l.sort,
+            initialNative: l.native_flag,
+            initialExotic: l.exotic_flag,
+            initialMedical: l.med_flag
         }) : l.route === "about" ? React.createElement(pa, {
             navigate: e
         }) : l.route === "research" ? React.createElement(ha, {
@@ -1621,7 +1659,10 @@
             scope: o.scope === "names" ? "names" : "all",
             page: Math.max(0, (parseInt(o.page, 10) || 1) - 1),
             uses: o.uses || "",
-            sort: ["az", "family", "evidence"].includes(o.sort) ? o.sort : ""
+            sort: ["az", "family", "evidence"].includes(o.sort) ? o.sort : "",
+            native_flag: o.native === "1",
+            exotic_flag: o.exotic === "1",
+            med_flag: o.m === "1"
         } : s[0] === "family" && s[1] ? {
             route: "browse",
             query: "",
@@ -1651,9 +1692,12 @@
         initialScope: Sc,
         initialPage: Pg,
         initialUses: Us,
-        initialSort: So
+        initialSort: So,
+        initialNative: Na,
+        initialExotic: Ex,
+        initialMedical: Mc
     }) {
-        const [e, s] = React.useState(r || ""), [o, i] = React.useState(l || ""), [a, c] = React.useState(Hb || ""), [srt, setSrt] = React.useState(So || ""), [t, p] = React.useState(!!Md), [h, w] = React.useState(!!En), [hv, setHv] = React.useState(!!Hv), [v, k] = React.useState(() => {
+        const [e, s] = React.useState(r || ""), [o, i] = React.useState(l || ""), [a, c] = React.useState(Hb || ""), [srt, setSrt] = React.useState(So || ""), [t, p] = React.useState(!!Md), [h, w] = React.useState(!!En), [hv, setHv] = React.useState(!!Hv), [na, setNa] = React.useState(!!Na), [ex, setEx] = React.useState(!!Ex), [mc, setMc] = React.useState(!!Mc), [v, k] = React.useState(() => {
             const ks = new Set((Us || "").split(",").filter(x => x.length === 1 && "ABFWT".includes(x)));
             if (Tg) {
                 const M = {
@@ -1731,6 +1775,9 @@
                     if (t && !(y.refs && y.refs.length)) return !1;
                     if (h && !y.en) return !1;
                     if (hv && !(y.hb && y.hb.length)) return !1;
+                    if (na && !y.nt) return !1;
+                    if (ex && !y.ex) return !1;
+                    if (mc && !y.m) return !1;
                     if (v && v.size > 0) {
                         const Y = y.u || [];
                         for (const k of v) {
@@ -1743,10 +1790,10 @@
                 if (srt === "family") return R0.slice().sort((A, C) => A.f.localeCompare(C.f) || A.s.localeCompare(C.s));
                 if (srt === "evidence") return R0.slice().sort((A, C) => ((C.refs || []).length - (A.refs || []).length) || A.s.localeCompare(C.s));
                 return R0
-            }, [dq, o, a, t, h, hv, v, q, srt]);
+            }, [dq, o, a, t, h, hv, na, ex, mc, v, q, srt]);
         React.useEffect(() => {
             firstRun.current ? firstRun.current = !1 : d(0)
-        }, [e, o, a, t, h, hv, v, q, srt]);
+        }, [e, o, a, t, h, hv, na, ex, mc, v, q, srt]);
         React.useEffect(() => {
             const P = [];
             e && P.push("q=" + encodeURIComponent(e));
@@ -1756,6 +1803,9 @@
             t && P.push("refs=1");
             h && P.push("endemic=1");
             hv && P.push("herb=1");
+            na && P.push("native=1");
+            ex && P.push("exotic=1");
+            mc && P.push("m=1");
             q === "names" && P.push("scope=names");
             srt && P.push("sort=" + srt);
             f > 0 && P.push("page=" + (f + 1));
@@ -3516,11 +3566,7 @@
         }, React.createElement("div", {
             style: {
                 maxWidth: 1240,
-                margin: "0 auto",
-                display: "grid",
-                gridTemplateColumns: "1.7fr 1fr",
-                gap: 48,
-                alignItems: "start"
+                margin: "0 auto"
             }
         }, React.createElement("div", null, React.createElement("div", {
             style: {
@@ -3613,6 +3659,9 @@
             const tagTypes = ["aromatic", "bee", "forage", "firewood", "toxic"];
             let url = "";
             if (d.type === "endemic") url = "/browse?endemic=1";
+            else if (d.type === "native") url = "/browse?native=1";
+            else if (d.type === "exotic") url = "/browse?exotic=1";
+            else if (d.type === "medicinal") url = "/browse?m=1";
             else if (tagTypes.includes(d.type)) url = "/browse?tag=" + d.type;
             return React.createElement(ta, {
                 key: g,
@@ -3622,9 +3671,17 @@
                 solid: d.solid,
                 onClick: url ? () => r(url) : null
             })
-        })), c.d && !c.rv ? React.createElement("div", {
+        }))
+        ), React.createElement("div", {
             style: {
-                marginTop: 28,
+                display: "grid",
+                gridTemplateColumns: "1.7fr 1fr",
+                gap: 48,
+                alignItems: "start",
+                marginTop: 28
+            }
+        }, c.d && !c.rv ? React.createElement("div", {
+            style: {
                 paddingTop: 24,
                 borderTop: `1px solid ${a.rule}`
             }
@@ -3648,14 +3705,14 @@
                 height: 1,
                 background: a.terracotta
             }
-        }), "Description"), React.createElement(DescWithFl, { text: c.d, C: a, fMono: o })) : null), React.createElement("div", null, React.createElement(ca, {
+        }), "Description"), React.createElement(DescWithFl, { text: c.d, C: a, fMono: o })) : null, React.createElement("div", null, React.createElement(ca, {
             slug: c.sl,
             species: c.s,
             C: a,
             fDisplay: l,
             fBody: e,
             fMono: o
-        })))), React.createElement("section", {
+        })))))), React.createElement("section", {
             style: {
                 borderTop: `1px solid ${a.rule}`,
                 borderBottom: `1px solid ${a.rule}`,
@@ -4101,7 +4158,7 @@
                 color: a.ink,
                 marginTop: 2
             }
-        }, d.a)))))), React.createElement("footer", {
+        }, d.a)))))), (() => { const fp_la = typeof FIELD_PHOTOS !== "undefined" ? FIELD_PHOTOS[n] : null; const obel_la = fp_la ? fp_la.filter(x => !x.cred) : []; const syn_la = fp_la ? fp_la.filter(x => x.as && !x.cred).map(x => x.as).filter((x, i, arr) => arr.indexOf(x) === i) : []; return obel_la.length ? React.createElement("div", { style: { borderTop: `1px solid ${a.rule}`, background: a.paperDeep, padding: "16px 48px" } }, React.createElement("div", { style: { maxWidth: 1240, margin: "0 auto", fontSize: 12.5, lineHeight: 1.6, color: a.muted } }, React.createElement("span", { style: { fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: a.forest, fontWeight: 600, marginRight: 10 } }, "Photo credit"), "The field photograph" + (obel_la.length > 1 ? "s" : "") + " on this page " + (obel_la.length > 1 ? "were" : "was") + " taken by ", React.createElement("strong", { style: { color: a.ink, fontWeight: 600 } }, typeof FIELD_CREDIT !== "undefined" ? FIELD_CREDIT : "MAPPRC"), ".", syn_la.length ? React.createElement(React.Fragment, null, " " + (obel_la.length === 1 ? "The photograph was" : obel_la.every(x => x.as) ? "These photographs were" : "Some of these photographs were") + " originally labelled under an older name or synonym (", syn_la.map((x, i) => React.createElement(React.Fragment, { key: i }, i ? ", " : "", React.createElement("i", null, x))), ") and " + (fp_la.length > 1 ? "are" : "is") + " shown here under the accepted name.") : null)) : null; })()), React.createElement("footer", {
             style: {
                 borderTop: `1px solid ${a.rule}`,
                 padding: "26px 48px",
@@ -4966,19 +5023,7 @@
     }
 
     function N(props) {
-        const n = props.C, mm = (location.hash || "").match(/^#\/species\/([^?&]+)/), sl = mm ? decodeURIComponent(mm[1]) : null, fp = sl && typeof FIELD_PHOTOS !== "undefined" ? FIELD_PHOTOS[sl] : null;
-        const syn = fp ? fp.filter(x => x.as && !x.cred).map(x => x.as).filter((x, i, a) => a.indexOf(x) === i) : [];
-        const obel = fp ? fp.filter(x => !x.cred) : []; const band = obel.length ? React.createElement("div", {
-            style: { borderTop: `1px solid ${n.rule}`, background: n.paper, padding: "22px 48px" }
-        }, React.createElement("div", {
-            style: { maxWidth: 1240, margin: "0 auto", fontSize: 13, lineHeight: 1.6, color: n.muted }
-        }, React.createElement("span", { style: { fontSize: 10.5, letterSpacing: "0.14em", textTransform: "uppercase", color: n.forest, fontWeight: 600, marginRight: 12 } }, "Photo credit"),
-            "The field photograph" + (obel.length > 1 ? "s" : "") + " on this page " + (obel.length > 1 ? "were" : "was") + " taken by ",
-            React.createElement("strong", { style: { color: n.ink, fontWeight: 600 } }, FIELD_CREDIT), ".",
-            syn.length ? React.createElement(React.Fragment, null, " " + (obel.length === 1 ? "The photograph was" : obel.every(x => x.as) ? "These photographs were" : "Some of these photographs were") + " originally labelled under an older name or synonym (",
-                syn.map((x, i) => React.createElement(React.Fragment, { key: i }, i ? ", " : "", React.createElement("i", null, x))),
-                ") and " + (fp.length > 1 ? "are" : "is") + " shown here under the accepted name.") : null)) : null;
-        return React.createElement(React.Fragment, null, band, React.createElement(N0, props))
+        return React.createElement(N0, props)
     }
 
     function N0({
