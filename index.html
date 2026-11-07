@@ -146,7 +146,7 @@
         if (!t) return null;
         var M = {jan:0,january:0,feb:1,february:1,mar:2,march:2,apr:3,april:3,may:4,jun:5,june:5,jul:6,july:6,aug:7,august:7,sep:8,september:8,oct:9,october:9,nov:10,november:10,dec:11,december:11};
         var MP = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)';
-        var re = new RegExp('[Ff]lower(?:ing)?\\s+(?:in\\s+)?(' + MP + ')([^.]*)', 'gi');
+        var re = new RegExp('[Ff]lower(?:ing)?(?:\\s+and\\s+[Ff]ruit(?:ing)?)?\\s+(?:in\\s+)?(' + MP + ')([^.]*)', 'gi');
         var hits = new Set();
         var m, r, i;
         while ((m = re.exec(t)) !== null) {
@@ -167,10 +167,11 @@
     function stripFl(t) {
         if (!t) return t;
         var MP = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)';
+        var FLR = '[Ff]lower(?:ing)?(?:\\s+and\\s+[Ff]ruit(?:ing)?)?';
         return t
-            .replace(new RegExp('[,;]\\s*[Ff]lower(?:ing)?\\s+(?:in\\s+)?' + MP + '[^.]*\\.', 'gi'), '.')
-            .replace(new RegExp('\\.\\s+[Ff]lower(?:ing)?\\s+(?:in\\s+)?' + MP + '[^.]*\\.', 'gi'), '.')
-            .replace(new RegExp('\\s*[Ff]lower(?:ing)?\\s+(?:in\\s+)?' + MP + '[^.]*\\.?$', 'gi'), '')
+            .replace(new RegExp('[,;]\\s*' + FLR + '\\s+(?:in\\s+)?' + MP + '[^.]*\\.', 'gi'), '.')
+            .replace(new RegExp('\\.\\s+' + FLR + '\\s+(?:in\\s+)?' + MP + '[^.]*\\.', 'gi'), '.')
+            .replace(new RegExp('\\s*' + FLR + '\\s+(?:in\\s+)?' + MP + '[^.]*\\.?$', 'gi'), '')
             .trim().replace(/\.+$/, '.');
     }
     function parseFr(t) {
@@ -733,7 +734,7 @@
             alt: "MAPPRC \u2014 Medicinal, Aromatic and Poisonous Plant Research Center",
             style: {
                 imageRendering: "-webkit-optimize-contrast",
-                height: 46,
+                height: 68,
                 width: "auto",
                 display: "block",
                 cursor: "pointer",
@@ -743,7 +744,7 @@
         }), React.createElement("div", {
             style: {
                 width: 1,
-                height: 38,
+                height: 54,
                 background: a.rule,
                 flexShrink: 0
             }
@@ -2544,24 +2545,29 @@
             }, m.m ? React.createElement(M, {
                 type: "medicinal",
                 color: u.terracotta,
-                title: "Medicinal"
+                title: "Medicinal",
+                onClick: () => setMc(true)
             }) : null, m.en ? React.createElement(M, {
                 type: "endemic",
                 color: u.forest,
-                title: "Endemic"
+                title: "Endemic",
+                onClick: () => w(true)
             }) : null, (m.u || []).includes("toxic") ? React.createElement(M, {
                 type: "toxic",
                 color: "#9E3B2A",
                 title: "Toxic",
-                solid: !0
+                solid: !0,
+                onClick: () => k(prev => { const nv = new Set(prev); nv.add("T"); return nv; })
             }) : null, (m.u || []).includes("aromatic") ? React.createElement(M, {
                 type: "aromatic",
                 color: u.sage,
-                title: "Aromatic"
+                title: "Aromatic",
+                onClick: () => k(prev => { const nv = new Set(prev); nv.add("A"); return nv; })
             }) : null, (m.u || []).includes("bee") ? React.createElement(M, {
                 type: "bee",
                 color: u.sage,
-                title: "Bee plant"
+                title: "Bee plant",
+                onClick: () => k(prev => { const nv = new Set(prev); nv.add("B"); return nv; })
             }) : null), React.createElement(K, {
                 size: 15,
                 color: u.muted
@@ -3073,21 +3079,32 @@
         type: n,
         color: r,
         title: l,
-        solid: e = !1
+        solid: e = !1,
+        onClick: OC
     }) {
+        const baseStyle = {
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 24,
+            height: 24,
+            borderRadius: 3,
+            border: `1.5px solid ${r}`,
+            background: e ? r : "transparent",
+            color: e ? "#FFFFFF" : r
+        };
+        if (OC) {
+            return React.createElement("button", {
+                title: (l || n) + " — click to filter",
+                onClick: ev => { ev.preventDefault(); ev.stopPropagation(); OC(ev); },
+                style: { ...baseStyle, cursor: "pointer", padding: 0, outline: "none", fontFamily: "inherit" },
+                onMouseEnter: ev => { ev.currentTarget.style.transform = "scale(1.15)"; ev.currentTarget.style.boxShadow = `0 0 0 2px ${r}44`; },
+                onMouseLeave: ev => { ev.currentTarget.style.transform = "scale(1)"; ev.currentTarget.style.boxShadow = "none"; }
+            }, React.createElement(D, { type: n, size: 14, color: e ? "#FFFFFF" : r }))
+        }
         return React.createElement("span", {
             title: l || n,
-            style: {
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: 24,
-                height: 24,
-                borderRadius: 3,
-                border: `1.5px solid ${r}`,
-                background: e ? r : "transparent",
-                color: e ? "#FFFFFF" : r
-            }
+            style: baseStyle
         }, React.createElement(D, {
             type: n,
             size: 14,
@@ -3674,10 +3691,6 @@
         }))
         ), React.createElement("div", {
             style: {
-                display: "grid",
-                gridTemplateColumns: "1.7fr 1fr",
-                gap: 48,
-                alignItems: "start",
                 marginTop: 28
             }
         }, c.d && !c.rv ? React.createElement("div", {
@@ -3705,7 +3718,7 @@
                 height: 1,
                 background: a.terracotta
             }
-        }), "Description"), React.createElement(DescWithFl, { text: c.d, C: a, fMono: o })) : null, React.createElement("div", null, React.createElement(ca, {
+        }), "Description"), React.createElement(DescWithFl, { text: c.d, C: a, fMono: o })) : null, React.createElement("div", { style: { marginTop: 32 } }, React.createElement(ca, {
             slug: c.sl,
             species: c.s,
             C: a,
@@ -3973,7 +3986,7 @@
             style: {
                 marginBottom: 4
             }
-        }, LrefX(rf))))) : null, d.medicinal ? React.createElement("div", {
+        }, LrefX(rf)))), (() => { const fp_la = typeof FIELD_PHOTOS !== "undefined" ? FIELD_PHOTOS[n] : null; const obel_la = fp_la ? fp_la.filter(x => !x.cred) : []; const syn_la = fp_la ? fp_la.filter(x => x.as && !x.cred).map(x => x.as).filter((x, i, arr) => arr.indexOf(x) === i) : []; return obel_la.length ? React.createElement("div", { style: { marginTop: 10, paddingTop: 10, borderTop: `1px dashed ${a.rule}`, fontSize: 12, lineHeight: 1.55, color: a.muted } }, React.createElement("span", { style: { fontSize: 9.5, letterSpacing: "0.14em", textTransform: "uppercase", color: a.forest, fontWeight: 600, marginRight: 8 } }, "Photo credit"), "The field photograph" + (obel_la.length > 1 ? "s" : "") + " on this page " + (obel_la.length > 1 ? "were" : "was") + " taken by ", React.createElement("strong", { style: { color: a.ink, fontWeight: 600 } }, typeof FIELD_CREDIT !== "undefined" ? FIELD_CREDIT : "MAPPRC"), ".", syn_la.length ? React.createElement(React.Fragment, null, " Originally labelled under ", syn_la.map((x, i) => React.createElement(React.Fragment, { key: i }, i ? ", " : "", React.createElement("i", null, x))), "; shown here under the accepted name.") : null) : null; })())) : null, d.medicinal ? React.createElement("div", {
             style: {
                 marginTop: 14,
                 paddingTop: 12,
@@ -4158,7 +4171,7 @@
                 color: a.ink,
                 marginTop: 2
             }
-        }, d.a)))))), (() => { const fp_la = typeof FIELD_PHOTOS !== "undefined" ? FIELD_PHOTOS[n] : null; const obel_la = fp_la ? fp_la.filter(x => !x.cred) : []; const syn_la = fp_la ? fp_la.filter(x => x.as && !x.cred).map(x => x.as).filter((x, i, arr) => arr.indexOf(x) === i) : []; return obel_la.length ? React.createElement("div", { style: { borderTop: `1px solid ${a.rule}`, background: a.paperDeep, padding: "16px 48px" } }, React.createElement("div", { style: { maxWidth: 1240, margin: "0 auto", fontSize: 12.5, lineHeight: 1.6, color: a.muted } }, React.createElement("span", { style: { fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: a.forest, fontWeight: 600, marginRight: 10 } }, "Photo credit"), "The field photograph" + (obel_la.length > 1 ? "s" : "") + " on this page " + (obel_la.length > 1 ? "were" : "was") + " taken by ", React.createElement("strong", { style: { color: a.ink, fontWeight: 600 } }, typeof FIELD_CREDIT !== "undefined" ? FIELD_CREDIT : "MAPPRC"), ".", syn_la.length ? React.createElement(React.Fragment, null, " " + (obel_la.length === 1 ? "The photograph was" : obel_la.every(x => x.as) ? "These photographs were" : "Some of these photographs were") + " originally labelled under an older name or synonym (", syn_la.map((x, i) => React.createElement(React.Fragment, { key: i }, i ? ", " : "", React.createElement("i", null, x))), ") and " + (fp_la.length > 1 ? "are" : "is") + " shown here under the accepted name.") : null)) : null; })()), React.createElement("footer", {
+        }, d.a)))))), React.createElement("footer", {
             style: {
                 borderTop: `1px solid ${a.rule}`,
                 padding: "26px 48px",
