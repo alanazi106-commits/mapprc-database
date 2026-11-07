@@ -142,6 +142,80 @@
         }
         return LrefOld(s)
     }
+    function parseFl(t) {
+        if (!t) return null;
+        var M = {jan:0,january:0,feb:1,february:1,mar:2,march:2,apr:3,april:3,may:4,jun:5,june:5,jul:6,july:6,aug:7,august:7,sep:8,september:8,oct:9,october:9,nov:10,november:10,dec:11,december:11};
+        var MP = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)';
+        var re = new RegExp('[Ff]lower(?:ing)?\\s+(?:in\\s+)?(' + MP + ')([^.]*)', 'gi');
+        var hits = new Set();
+        var m, r, i;
+        while ((m = re.exec(t)) !== null) {
+            var body = (m[1] + (m[2] || '')).split(/\bfruit(?:ing)?\b/i)[0];
+            var rng = /(\w+)\s*[–\-—]\s*(\w+)|(\w+)\s+to\s+(\w+)/gi;
+            while ((r = rng.exec(body)) !== null) {
+                var s1 = M[(r[1]||r[3]||'').toLowerCase()], e1 = M[(r[2]||r[4]||'').toLowerCase()];
+                if (s1 != null && e1 != null) {
+                    if (e1 >= s1) { for (i=s1; i<=e1; i++) hits.add(i); }
+                    else { for (i=s1; i<=11; i++) hits.add(i); for (i=0; i<=e1; i++) hits.add(i); }
+                }
+            }
+            var mo = M[m[1].toLowerCase()];
+            if (mo != null) hits.add(mo);
+        }
+        return hits.size ? hits : null;
+    }
+    function stripFl(t) {
+        if (!t) return t;
+        var MP = '(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)';
+        return t
+            .replace(new RegExp('[,;]\\s*[Ff]lower(?:ing)?\\s+(?:in\\s+)?' + MP + '[^.]*\\.', 'gi'), '.')
+            .replace(new RegExp('\\.\\s+[Ff]lower(?:ing)?\\s+(?:in\\s+)?' + MP + '[^.]*\\.', 'gi'), '.')
+            .replace(new RegExp('\\s*[Ff]lower(?:ing)?\\s+(?:in\\s+)?' + MP + '[^.]*\\.?$', 'gi'), '')
+            .trim().replace(/\.+$/, '.');
+    }
+    function FlBar(p) {
+        var C = p.C, fMono = p.fMono, months = p.months;
+        var ML = ['J','F','M','A','M','J','J','A','S','O','N','D'];
+        var FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+        return React.createElement('div', {
+            style: { display: 'flex', alignItems: 'flex-start', gap: 12, marginTop: 16, flexWrap: 'wrap' }
+        },
+            React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
+                React.createElement('div', { style: { display: 'flex', gap: 2 } },
+                    ML.map(function(_, idx) {
+                        return React.createElement('div', { key: idx, title: FULL[idx], style: {
+                            width: 22, height: 20, borderRadius: 2,
+                            background: months.has(idx) ? C.terracotta : C.paperDeep,
+                            border: '1px solid ' + (months.has(idx) ? C.terracotta : C.rule)
+                        }});
+                    })
+                ),
+                React.createElement('div', { style: { display: 'flex', gap: 2 } },
+                    ML.map(function(lb, idx) {
+                        return React.createElement('div', { key: idx, style: {
+                            width: 22, textAlign: 'center', fontFamily: fMono,
+                            fontSize: 9, color: months.has(idx) ? C.terracotta : C.muted,
+                            fontWeight: months.has(idx) ? 600 : 400
+                        }}, lb);
+                    })
+                )
+            ),
+            React.createElement('div', { style: {
+                fontFamily: fMono, fontSize: 10, letterSpacing: '0.12em',
+                textTransform: 'uppercase', color: C.muted, marginTop: 2
+            }}, 'Flowering season')
+        );
+    }
+    function DescWithFl(p) {
+        var fl = parseFl(p.text);
+        var stripped = fl ? stripFl(p.text) : p.text;
+        return React.createElement(React.Fragment, null,
+            React.createElement('p', {
+                style: { margin: 0, fontSize: 15.5, lineHeight: 1.7, color: p.C.ink }
+            }, stripped),
+            fl ? React.createElement(FlBar, { months: fl, C: p.C, fMono: p.fMono }) : null
+        );
+    }
     function LrefOld(s) {
         s = String(s);
         var L = {
@@ -3574,14 +3648,7 @@
                 height: 1,
                 background: a.terracotta
             }
-        }), "Description"), React.createElement("p", {
-            style: {
-                margin: 0,
-                fontSize: 15.5,
-                lineHeight: 1.7,
-                color: a.ink
-            }
-        }, c.d)) : null), React.createElement("div", null, React.createElement(ca, {
+        }), "Description"), React.createElement(DescWithFl, { text: c.d, C: a, fMono: o })) : null), React.createElement("div", null, React.createElement(ca, {
             slug: c.sl,
             species: c.s,
             C: a,
