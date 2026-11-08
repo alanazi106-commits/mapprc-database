@@ -4171,7 +4171,7 @@
                 color: a.ink,
                 marginTop: 2
             }
-        }, d.a)))))), (() => { return null; })()), React.createElement("footer", {
+        }, d.a)))))), (() => { const fp_la = null; const obel_la = fp_la ? fp_la.filter(x => !x.cred) : []; const syn_la = fp_la ? fp_la.filter(x => x.as && !x.cred).map(x => x.as).filter((x, i, arr) => arr.indexOf(x) === i) : []; return obel_la.length ? React.createElement("div", { style: { borderTop: `1px solid ${a.rule}`, background: a.paperDeep, padding: "16px 48px" } }, React.createElement("div", { style: { maxWidth: 1240, margin: "0 auto", fontSize: 12.5, lineHeight: 1.6, color: a.muted } }, React.createElement("span", { style: { fontSize: 10, letterSpacing: "0.14em", textTransform: "uppercase", color: a.forest, fontWeight: 600, marginRight: 10 } }, "Photo credit"), "The field photograph" + (obel_la.length > 1 ? "s" : "") + " on this page " + (obel_la.length > 1 ? "were" : "was") + " taken by ", React.createElement("strong", { style: { color: a.ink, fontWeight: 600 } }, typeof FIELD_CREDIT !== "undefined" ? FIELD_CREDIT : "MAPPRC"), ".", syn_la.length ? React.createElement(React.Fragment, null, " " + (obel_la.length === 1 ? "The photograph was" : obel_la.every(x => x.as) ? "These photographs were" : "Some of these photographs were") + " originally labelled under an older name or synonym (", syn_la.map((x, i) => React.createElement(React.Fragment, { key: i }, i ? ", " : "", React.createElement("i", null, x))), ") and " + (fp_la.length > 1 ? "are" : "is") + " shown here under the accepted name.") : null)) : null; })()), React.createElement("footer", {
             style: {
                 borderTop: `1px solid ${a.rule}`,
                 padding: "26px 48px",
