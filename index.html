@@ -3702,7 +3702,16 @@
                 solid: d.solid,
                 onClick: url ? () => r(url) : null
             })
-        })), null), React.createElement("div", { style: { marginTop: 32, display: "flex", gap: 48, alignItems: "stretch" } },
+        })), null),
+        React.createElement("div", { style: { display: "flex", marginTop: 20, borderTop: `1px solid ${a.rule}`, borderBottom: `1px solid ${a.rule}`, background: a.paperDeep } },
+            [["Family", c.f || "—", l], ["Habit", c.h || "—", e], ["Life cycle", c.l || "—", e], ["Synonyms", String(p.length), e], ["IUCN", c.iu ? "Listed" : "—", e]].map(([d, g, S], x) =>
+                React.createElement("div", { key: d, style: { flex: 1, padding: "7px 16px", borderLeft: x === 0 ? "none" : `1px solid ${a.rule}` } },
+                    React.createElement("div", { style: { fontFamily: o, fontSize: 9, letterSpacing: "0.14em", textTransform: "uppercase", color: a.muted } }, d),
+                    React.createElement("div", { style: { fontFamily: S, fontSize: 13, color: a.ink, marginTop: 3 } }, g)
+                )
+            )
+        ),
+        React.createElement("div", { style: { marginTop: 24, display: "flex", gap: 48, alignItems: "stretch" } },
         c.d && !c.rv ? React.createElement("div", {
             style: { flex: 1, minWidth: 0, paddingTop: 4 }
         }, React.createElement("div", {
@@ -3720,7 +3729,14 @@
             }
         }, React.createElement("span", {
             style: { display: "inline-block", width: 16, height: 1, background: a.terracotta }
-        }), "Description"), React.createElement(DescWithFl, { text: c.d, C: a, fMono: o })) : React.createElement("div", { style: { flex: 1 } }),
+        }), "Description"), React.createElement(DescWithFl, { text: c.d, C: a, fMono: o }),
+        React.createElement("div", { style: { marginTop: 28 } },
+            React.createElement("div", { style: { fontFamily: o, fontSize: 10.5, letterSpacing: "0.16em", textTransform: "uppercase", color: a.forest, fontWeight: 600, marginBottom: 12, display: "flex", alignItems: "center", gap: 10 } },
+                React.createElement("span", { style: { display: "inline-block", width: 16, height: 1, background: a.forest } }),
+                "Distribution & Habitat"
+            ),
+            React.createElement(da, { r: c, C: a, fBody: e, fMono: o })
+        )) : React.createElement("div", { style: { flex: 1 } }),
         React.createElement("div", {
             style: { flexShrink: 0, width: 300 }
         }, React.createElement(ca, {
@@ -3731,50 +3747,6 @@
             fBody: e,
             fMono: o
         }))))), React.createElement("section", {
-            style: {
-                borderTop: `1px solid ${a.rule}`,
-                borderBottom: `1px solid ${a.rule}`,
-                background: a.paperDeep
-            }
-        }, React.createElement("div", {
-            style: {
-                maxWidth: 1240,
-                margin: "0 auto",
-                padding: "16px 48px",
-                display: "grid",
-                gridTemplateColumns: "repeat(5, 1fr)",
-                gap: 0
-            }
-        }, [
-            ["Family", c.f || "\u2014", l],
-            ["Habit", c.h || "\u2014", e],
-            ["Life cycle", c.l || "\u2014", e],
-            ["Synonyms", String(p.length), e],
-            ["IUCN", c.iu ? "Listed" : "\u2014", e]
-        ].map(([d, g, S], x) => React.createElement("div", {
-            key: d,
-            style: {
-                padding: "4px 20px 4px 0",
-                borderLeft: x === 0 ? "none" : `1px solid ${a.rule}`,
-                paddingLeft: x === 0 ? 0 : 20
-            }
-        }, React.createElement("div", {
-            style: {
-                fontFamily: o,
-                fontSize: 10,
-                letterSpacing: "0.14em",
-                textTransform: "uppercase",
-                color: a.muted
-            }
-        }, d), React.createElement("div", {
-            style: {
-                fontFamily: S,
-                fontSize: 15,
-                color: a.ink,
-                marginTop: 4,
-                fontStyle: "normal"
-            }
-        }, g))))), React.createElement("section", {
             style: {
                 padding: "24px 48px 28px"
             }
@@ -3787,7 +3759,7 @@
                 gap: 64,
                 alignItems: "start"
             }
-        }, React.createElement("div", null, v.map((d, g) => React.createElement(CSEC, {
+        }, React.createElement("div", null, v.filter(d => d.key !== "distro").map((d, g) => React.createElement(CSEC, {
             key: (c.sl || "") + d.key,
             d: d,
             C: a,
