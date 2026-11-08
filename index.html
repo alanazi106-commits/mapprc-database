@@ -1814,7 +1814,7 @@
             if (window.location.hash !== NH) try {
                 history.replaceState(history.state, "", NH)
             } catch (er) {}
-        }, [e, o, a, t, h, hv, v, q, srt, f]);
+        }, [e, o, a, t, h, hv, na, ex, mc, v, q, srt, f]);
         const listTop = React.useRef(null), prevPage = React.useRef(f);
         React.useEffect(() => {
             if (prevPage.current !== f) {
@@ -1828,7 +1828,7 @@
         const H_ = H,
             J = T.slice(f * g, (f + 1) * g),
             Z = () => {
-                s(""), i(""), c(""), p(!1), w(!1), setHv(!1), k(new Set), Q("all"), setSrt("")
+                s(""), i(""), c(""), p(!1), w(!1), setHv(!1), setNa(!1), setEx(!1), setMc(!1), k(new Set), Q("all"), setSrt("")
             },
             va = {
                 A: "Aromatic",
@@ -2352,6 +2352,9 @@
                 l: "With herbarium specimen",
                 c: () => setHv(!1)
             });
+            if (na) F.push({ k: "na", l: "Native only", c: () => setNa(!1) });
+            if (ex) F.push({ k: "ex", l: "Exotic only", c: () => setEx(!1) });
+            if (mc) F.push({ k: "mc", l: "Medicinal only", c: () => setMc(!1) });
             const M = {
                 A: "Aromatic",
                 B: "Bee plant",
@@ -3688,13 +3691,9 @@
                 solid: d.solid,
                 onClick: url ? () => r(url) : null
             })
-        }))
-        ), React.createElement("div", {
+        })), c.d && !c.rv ? React.createElement("div", {
             style: {
-                marginTop: 28
-            }
-        }, c.d && !c.rv ? React.createElement("div", {
-            style: {
+                marginTop: 28,
                 paddingTop: 24,
                 borderTop: `1px solid ${a.rule}`
             }
@@ -3718,14 +3717,14 @@
                 height: 1,
                 background: a.terracotta
             }
-        }), "Description"), React.createElement(DescWithFl, { text: c.d, C: a, fMono: o })) : null, React.createElement("div", { style: { marginTop: 32 } }, React.createElement(ca, {
+        }), "Description"), React.createElement(DescWithFl, { text: c.d, C: a, fMono: o })) : null), React.createElement("div", { style: { marginTop: 32 } }, React.createElement(ca, {
             slug: c.sl,
             species: c.s,
             C: a,
             fDisplay: l,
             fBody: e,
             fMono: o
-        })))))), React.createElement("section", {
+        })))), React.createElement("section", {
             style: {
                 borderTop: `1px solid ${a.rule}`,
                 borderBottom: `1px solid ${a.rule}`,
@@ -4213,7 +4212,7 @@
             fBody: e,
             fMono: o,
             navigate: r
-        })
+        }))
     }
 
     function ca({
@@ -5036,7 +5035,19 @@
     }
 
     function N(props) {
-        return React.createElement(N0, props)
+        const n = props.C, mm = (location.hash || "").match(/^#\/species\/([^?&]+)/), sl = mm ? decodeURIComponent(mm[1]) : null, fp = sl && typeof FIELD_PHOTOS !== "undefined" ? FIELD_PHOTOS[sl] : null;
+        const syn = fp ? fp.filter(x => x.as && !x.cred).map(x => x.as).filter((x, i, a) => a.indexOf(x) === i) : [];
+        const obel = fp ? fp.filter(x => !x.cred) : []; const band = obel.length ? React.createElement("div", {
+            style: { borderTop: `1px solid ${n.rule}`, background: n.paper, padding: "22px 48px" }
+        }, React.createElement("div", {
+            style: { maxWidth: 1240, margin: "0 auto", fontSize: 13, lineHeight: 1.6, color: n.muted }
+        }, React.createElement("span", { style: { fontSize: 10.5, letterSpacing: "0.14em", textTransform: "uppercase", color: n.forest, fontWeight: 600, marginRight: 12 } }, "Photo credit"),
+            "The field photograph" + (obel.length > 1 ? "s" : "") + " on this page " + (obel.length > 1 ? "were" : "was") + " taken by ",
+            React.createElement("strong", { style: { color: n.ink, fontWeight: 600 } }, FIELD_CREDIT), ".",
+            syn.length ? React.createElement(React.Fragment, null, " " + (obel.length === 1 ? "The photograph was" : obel.every(x => x.as) ? "These photographs were" : "Some of these photographs were") + " originally labelled under an older name or synonym (",
+                syn.map((x, i) => React.createElement(React.Fragment, { key: i }, i ? ", " : "", React.createElement("i", null, x))),
+                ") and " + (fp.length > 1 ? "are" : "is") + " shown here under the accepted name.") : null)) : null;
+        return React.createElement(React.Fragment, null, band, React.createElement(N0, props))
     }
 
     function N0({
