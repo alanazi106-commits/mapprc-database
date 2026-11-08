@@ -207,33 +207,38 @@
     }
     function FlBar(p) {
         var C = p.C, fMono = p.fMono, months = p.months, label = p.label || 'Flowering season', barColor = p.barColor || C.terracotta;
-        var ML = ['J','F','M','A','M','J','J','A','S','O','N','D'];
         var FULL = ['January','February','March','April','May','June','July','August','September','October','November','December'];
         return React.createElement('div', {
             style: { display: 'flex', alignItems: 'flex-start', gap: 12, marginTop: 10, flexWrap: 'wrap' }
         },
-            React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
-                React.createElement('div', { style: { display: 'flex', gap: 3 } },
-                    ML.map(function(_, idx) {
+            React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 8 } },
+                React.createElement('div', { style: { display: 'flex', gap: 6 } },
+                    FULL.map(function(_, idx) {
                         var prev = (idx + 11) % 12, next = (idx + 1) % 12;
                         var active = months.has(idx);
                         var adjacent = !active && (months.has(prev) || months.has(next));
                         var bg = active ? barColor : adjacent ? barColor + '3D' : C.paperDeep;
                         var bdr = active ? barColor : adjacent ? barColor + '60' : C.rule;
                         return React.createElement('div', { key: idx, title: FULL[idx], style: {
-                            width: 28, height: 26, borderRadius: 3,
+                            width: 56, height: 52, borderRadius: 6,
                             background: bg,
                             border: '1px solid ' + bdr
                         }});
                     })
                 ),
-                React.createElement('div', { style: { display: 'flex', gap: 3 } },
-                    ML.map(function(lb, idx) {
+                React.createElement('div', { style: { display: 'flex', gap: 6 } },
+                    FULL.map(function(lb, idx) {
                         var active = months.has(idx);
                         return React.createElement('div', { key: idx, style: {
-                            width: 28, textAlign: 'center', fontFamily: fMono,
-                            fontSize: 10, color: active ? barColor : C.muted,
-                            fontWeight: active ? 600 : 400
+                            width: 56, textAlign: 'center', fontFamily: fMono,
+                            fontSize: 9, color: active ? barColor : C.muted,
+                            fontWeight: active ? 600 : 400,
+                            writingMode: 'vertical-rl',
+                            transform: 'rotate(180deg)',
+                            height: 72,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center'
                         }}, lb);
                     })
                 )
@@ -3476,7 +3481,7 @@
                 custom: "barcoding"
             }, {
                 key: "refs",
-                title: "References",
+                title: "References and Attributions",
                 custom: c.refs && c.refs.length ? "references" : null,
                 refs: c.refs
             }].filter(d => d.body || d.custom).filter(d => !c.rv || ["distro", "tu", "barc", "refs"].includes(d.key)),
@@ -3697,12 +3702,9 @@
                 solid: d.solid,
                 onClick: url ? () => r(url) : null
             })
-        })), c.d && !c.rv ? React.createElement("div", {
-            style: {
-                marginTop: 28,
-                paddingTop: 24,
-                borderTop: `1px solid ${a.rule}`
-            }
+        })), null), React.createElement("div", { style: { marginTop: 32, display: "flex", gap: 48, alignItems: "flex-start" } },
+        c.d && !c.rv ? React.createElement("div", {
+            style: { flex: 1, minWidth: 0, paddingTop: 4 }
         }, React.createElement("div", {
             style: {
                 fontFamily: o,
@@ -3717,20 +3719,18 @@
                 gap: 10
             }
         }, React.createElement("span", {
-            style: {
-                display: "inline-block",
-                width: 16,
-                height: 1,
-                background: a.terracotta
-            }
-        }), "Description"), React.createElement(DescWithFl, { text: c.d, C: a, fMono: o })) : null), React.createElement("div", { style: { marginTop: 32 } }, React.createElement(ca, {
+            style: { display: "inline-block", width: 16, height: 1, background: a.terracotta }
+        }), "Description"), React.createElement(DescWithFl, { text: c.d, C: a, fMono: o })) : React.createElement("div", { style: { flex: 1 } }),
+        React.createElement("div", {
+            style: { flexShrink: 0, width: 300 }
+        }, React.createElement(ca, {
             slug: c.sl,
             species: c.s,
             C: a,
             fDisplay: l,
             fBody: e,
             fMono: o
-        })))), React.createElement("section", {
+        }))))), React.createElement("section", {
             style: {
                 borderTop: `1px solid ${a.rule}`,
                 borderBottom: `1px solid ${a.rule}`,
@@ -3844,7 +3844,25 @@
                 paddingLeft: 28,
                 textIndent: -28
             }
-        }, LrefX(rf)))) : d.custom === "chemistry" ? React.createElement("div", null, d.pc ? React.createElement("p", {
+        }, LrefX(rf))),
+        (() => {
+            const sl = c.sl, fp = sl && typeof FIELD_PHOTOS !== "undefined" ? FIELD_PHOTOS[sl] : null;
+            if (!fp) return null;
+            const obel = fp.filter(x => !x.cred);
+            if (!obel.length) return null;
+            const syn = fp.filter(x => x.as && !x.cred).map(x => x.as).filter((x, i, arr) => arr.indexOf(x) === i);
+            return React.createElement("div", {
+                style: { marginTop: 24, paddingTop: 16, borderTop: `1px dashed ${a.rule}`, fontSize: 13, lineHeight: 1.6, color: a.muted }
+            }, React.createElement("span", {
+                style: { fontSize: 10.5, letterSpacing: "0.14em", textTransform: "uppercase", color: a.forest, fontWeight: 600, marginRight: 12 }
+            }, "Photo attribution"),
+            "The field photograph" + (obel.length > 1 ? "s" : "") + " on this page " + (obel.length > 1 ? "were" : "was") + " taken by ",
+            React.createElement("strong", { style: { color: a.ink, fontWeight: 600 } }, typeof FIELD_CREDIT !== "undefined" ? FIELD_CREDIT : ""),
+            ".",
+            syn.length ? React.createElement(React.Fragment, null, " " + (obel.length === 1 ? "The photograph was" : obel.every(x => x.as) ? "These photographs were" : "Some of these photographs were") + " originally labelled under an older name or synonym (",
+                syn.map((x, i) => React.createElement(React.Fragment, { key: i }, i ? ", " : "", React.createElement("i", null, x))),
+                ") and " + (fp.length > 1 ? "are" : "is") + " shown here under the accepted name.") : null);
+        })()) : d.custom === "chemistry" ? React.createElement("div", null, d.pc ? React.createElement("p", {
             style: {
                 margin: "0 0 20px",
                 fontSize: 15.5,
@@ -5041,19 +5059,7 @@
     }
 
     function N(props) {
-        const n = props.C, mm = (location.hash || "").match(/^#\/species\/([^?&]+)/), sl = mm ? decodeURIComponent(mm[1]) : null, fp = sl && typeof FIELD_PHOTOS !== "undefined" ? FIELD_PHOTOS[sl] : null;
-        const syn = fp ? fp.filter(x => x.as && !x.cred).map(x => x.as).filter((x, i, a) => a.indexOf(x) === i) : [];
-        const obel = fp ? fp.filter(x => !x.cred) : []; const band = obel.length ? React.createElement("div", {
-            style: { borderTop: `1px solid ${n.rule}`, background: n.paper, padding: "22px 48px" }
-        }, React.createElement("div", {
-            style: { maxWidth: 1240, margin: "0 auto", fontSize: 13, lineHeight: 1.6, color: n.muted }
-        }, React.createElement("span", { style: { fontSize: 10.5, letterSpacing: "0.14em", textTransform: "uppercase", color: n.forest, fontWeight: 600, marginRight: 12 } }, "Photo credit"),
-            "The field photograph" + (obel.length > 1 ? "s" : "") + " on this page " + (obel.length > 1 ? "were" : "was") + " taken by ",
-            React.createElement("strong", { style: { color: n.ink, fontWeight: 600 } }, FIELD_CREDIT), ".",
-            syn.length ? React.createElement(React.Fragment, null, " " + (obel.length === 1 ? "The photograph was" : obel.every(x => x.as) ? "These photographs were" : "Some of these photographs were") + " originally labelled under an older name or synonym (",
-                syn.map((x, i) => React.createElement(React.Fragment, { key: i }, i ? ", " : "", React.createElement("i", null, x))),
-                ") and " + (fp.length > 1 ? "are" : "is") + " shown here under the accepted name.") : null)) : null;
-        return React.createElement(React.Fragment, null, band, React.createElement(N0, props))
+        return React.createElement(N0, props)
     }
 
     function N0({
