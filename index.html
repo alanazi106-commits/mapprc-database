@@ -231,8 +231,8 @@
                         var active = months.has(idx);
                         return React.createElement('div', { key: idx, style: {
                             width: 56, textAlign: 'center', fontFamily: fMono,
-                            fontSize: 9, color: active ? barColor : C.muted,
-                            fontWeight: active ? 600 : 400,
+                            fontSize: 11, color: active ? barColor : C.muted,
+                            fontWeight: active ? 700 : 600,
                             writingMode: 'vertical-rl',
                             transform: 'rotate(180deg)',
                             height: 72,
@@ -1884,7 +1884,7 @@
             alt: "MAPPRC",
             style: {
                 imageRendering: "-webkit-optimize-contrast",
-                height: 46,
+                height: 69,
                 width: "auto",
                 display: "block",
                 cursor: "pointer",
@@ -1974,7 +1974,7 @@
             alt: "KSU \u2014 College of Pharmacy",
             style: {
                 imageRendering: "-webkit-optimize-contrast",
-                height: 50,
+                height: 75,
                 width: "auto",
                 display: "block"
             }
@@ -3162,7 +3162,7 @@
             alt: "MAPPRC",
             style: {
                 imageRendering: "-webkit-optimize-contrast",
-                height: 44,
+                height: 66,
                 width: "auto",
                 display: "block",
                 cursor: "pointer",
@@ -3263,7 +3263,7 @@
             alt: "KSU \u2014 College of Pharmacy",
             style: {
                 imageRendering: "-webkit-optimize-contrast",
-                height: 48,
+                height: 72,
                 width: "auto",
                 display: "block"
             }
@@ -3702,7 +3702,7 @@
                 solid: d.solid,
                 onClick: url ? () => r(url) : null
             })
-        })), null), React.createElement("div", { style: { marginTop: 32, display: "flex", gap: 48, alignItems: "flex-start" } },
+        })), null), React.createElement("div", { style: { marginTop: 32, display: "flex", gap: 48, alignItems: "stretch" } },
         c.d && !c.rv ? React.createElement("div", {
             style: { flex: 1, minWidth: 0, paddingTop: 4 }
         }, React.createElement("div", {
