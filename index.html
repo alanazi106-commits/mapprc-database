@@ -3848,20 +3848,26 @@
         (() => {
             const sl = c.sl, fp = sl && typeof FIELD_PHOTOS !== "undefined" ? FIELD_PHOTOS[sl] : null;
             if (!fp) return null;
+            const credPhotos = fp.filter(x => x.cred);
             const obel = fp.filter(x => !x.cred);
-            if (!obel.length) return null;
-            const syn = fp.filter(x => x.as && !x.cred).map(x => x.as).filter((x, i, arr) => arr.indexOf(x) === i);
+            if (!credPhotos.length && !obel.length) return null;
+            const syn = obel.filter(x => x.as).map(x => x.as).filter((x, i, arr) => arr.indexOf(x) === i);
             return React.createElement("div", {
                 style: { marginTop: 24, paddingTop: 16, borderTop: `1px dashed ${a.rule}`, fontSize: 13, lineHeight: 1.6, color: a.muted }
             }, React.createElement("span", {
                 style: { fontSize: 10.5, letterSpacing: "0.14em", textTransform: "uppercase", color: a.forest, fontWeight: 600, marginRight: 12 }
             }, "Photo attribution"),
-            "The field photograph" + (obel.length > 1 ? "s" : "") + " on this page " + (obel.length > 1 ? "were" : "was") + " taken by ",
-            React.createElement("strong", { style: { color: a.ink, fontWeight: 600 } }, typeof FIELD_CREDIT !== "undefined" ? FIELD_CREDIT : ""),
-            ".",
-            syn.length ? React.createElement(React.Fragment, null, " " + (obel.length === 1 ? "The photograph was" : obel.every(x => x.as) ? "These photographs were" : "Some of these photographs were") + " originally labelled under an older name or synonym (",
-                syn.map((x, i) => React.createElement(React.Fragment, { key: i }, i ? ", " : "", React.createElement("i", null, x))),
-                ") and " + (fp.length > 1 ? "are" : "is") + " shown here under the accepted name.") : null);
+            credPhotos.map((x, ci) => React.createElement("div", { key: "c" + ci, style: { marginTop: ci === 0 ? 6 : 4 } }, x.cred)),
+            obel.length ? React.createElement(React.Fragment, null,
+                React.createElement("div", { style: { marginTop: credPhotos.length ? 4 : 0 } },
+                    "The field photograph" + (obel.length > 1 ? "s" : "") + " on this page " + (obel.length > 1 ? "were" : "was") + " taken by ",
+                    React.createElement("strong", { style: { color: a.ink, fontWeight: 600 } }, typeof FIELD_CREDIT !== "undefined" ? FIELD_CREDIT : ""),
+                    ".",
+                    syn.length ? React.createElement(React.Fragment, null, " " + (obel.length === 1 ? "The photograph was" : obel.every(x => x.as) ? "These photographs were" : "Some of these photographs were") + " originally labelled under an older name or synonym (",
+                        syn.map((x, i) => React.createElement(React.Fragment, { key: i }, i ? ", " : "", React.createElement("i", null, x))),
+                        ") and " + (fp.length > 1 ? "are" : "is") + " shown here under the accepted name.") : null
+                )
+            ) : null);
         })()) : d.custom === "chemistry" ? React.createElement("div", null, d.pc ? React.createElement("p", {
             style: {
                 margin: "0 0 20px",
@@ -4249,9 +4255,9 @@
     }) {
         return React.createElement("div", {
             style: {
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: 12
+                display: "flex",
+                flexDirection: "column",
+                gap: 16
             }
         }, React.createElement(V, {
             slug: n,
@@ -4506,7 +4512,7 @@
                 objectFit: "cover",
                 display: "block"
             }
-        }), FP && FP.length > 1 && React.createElement(FNAV, { FP, fi, sfi })), FP && React.createElement(FCAP, { FP, fi, C: i })) : React.createElement("div", {
+        }), FP && FP.length > 1 && React.createElement(FNAV, { FP, fi, sfi }))) : React.createElement("div", {
             style: {
                 aspectRatio: "4 / 5",
                 display: "flex",
