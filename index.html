@@ -213,21 +213,27 @@
             style: { display: 'flex', alignItems: 'flex-start', gap: 12, marginTop: 10, flexWrap: 'wrap' }
         },
             React.createElement('div', { style: { display: 'flex', flexDirection: 'column', gap: 4 } },
-                React.createElement('div', { style: { display: 'flex', gap: 2 } },
+                React.createElement('div', { style: { display: 'flex', gap: 3 } },
                     ML.map(function(_, idx) {
+                        var prev = (idx + 11) % 12, next = (idx + 1) % 12;
+                        var active = months.has(idx);
+                        var adjacent = !active && (months.has(prev) || months.has(next));
+                        var bg = active ? barColor : adjacent ? barColor + '3D' : C.paperDeep;
+                        var bdr = active ? barColor : adjacent ? barColor + '60' : C.rule;
                         return React.createElement('div', { key: idx, title: FULL[idx], style: {
-                            width: 22, height: 20, borderRadius: 2,
-                            background: months.has(idx) ? barColor : C.paperDeep,
-                            border: '1px solid ' + (months.has(idx) ? barColor : C.rule)
+                            width: 28, height: 26, borderRadius: 3,
+                            background: bg,
+                            border: '1px solid ' + bdr
                         }});
                     })
                 ),
-                React.createElement('div', { style: { display: 'flex', gap: 2 } },
+                React.createElement('div', { style: { display: 'flex', gap: 3 } },
                     ML.map(function(lb, idx) {
+                        var active = months.has(idx);
                         return React.createElement('div', { key: idx, style: {
-                            width: 22, textAlign: 'center', fontFamily: fMono,
-                            fontSize: 9, color: months.has(idx) ? barColor : C.muted,
-                            fontWeight: months.has(idx) ? 600 : 400
+                            width: 28, textAlign: 'center', fontFamily: fMono,
+                            fontSize: 10, color: active ? barColor : C.muted,
+                            fontWeight: active ? 600 : 400
                         }}, lb);
                     })
                 )
@@ -248,8 +254,8 @@
             React.createElement('p', {
                 style: { margin: 0, fontSize: 15.5, lineHeight: 1.7, color: p.C.ink }
             }, stripped),
-            fl ? React.createElement(FlBar, { months: fl, C: p.C, fMono: p.fMono, label: 'Flowering season', barColor: p.C.terracotta }) : null,
-            fr ? React.createElement(FlBar, { months: fr, C: p.C, fMono: p.fMono, label: 'Fruiting season', barColor: p.C.forest }) : null
+            fl ? React.createElement(FlBar, { months: fl, C: p.C, fMono: p.fMono, label: 'Flowering season', barColor: '#D4587A' }) : null,
+            fr ? React.createElement(FlBar, { months: fr, C: p.C, fMono: p.fMono, label: 'Fruiting season', barColor: '#4A9B6F' }) : null
         );
     }
     function LrefOld(s) {
