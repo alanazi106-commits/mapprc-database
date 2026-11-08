@@ -3986,7 +3986,7 @@
             style: {
                 marginBottom: 4
             }
-        }, LrefX(rf)))), (typeof FIELD_PHOTOS !== "undefined" && FIELD_PHOTOS[n] && FIELD_PHOTOS[n].filter(x => !x.cred).length ? React.createElement("div", { style: { marginTop: 10, paddingTop: 10, borderTop: `1px dashed ${a.rule}`, fontSize: 12, lineHeight: 1.55, color: a.muted } }, React.createElement("span", { style: { fontSize: 9.5, letterSpacing: "0.14em", textTransform: "uppercase", color: a.forest, fontWeight: 600, marginRight: 8 } }, "Photo credit"), "The field photograph" + (FIELD_PHOTOS[n].filter(x => !x.cred).length > 1 ? "s" : "") + " on this page " + (FIELD_PHOTOS[n].filter(x => !x.cred).length > 1 ? "were" : "was") + " taken by ", React.createElement("strong", { style: { color: a.ink, fontWeight: 600 } }, typeof FIELD_CREDIT !== "undefined" ? FIELD_CREDIT : "MAPPRC"), ".", FIELD_PHOTOS[n].filter(x => x.as && !x.cred).map(x => x.as).filter((x, i, arr) => arr.indexOf(x) === i).length ? React.createElement(React.Fragment, null, " Originally labelled under ", FIELD_PHOTOS[n].filter(x => x.as && !x.cred).map(x => x.as).filter((x, i, arr) => arr.indexOf(x) === i).map((x, i) => React.createElement(React.Fragment, { key: i }, i ? ", " : "", React.createElement("i", null, x))), "; shown here under the accepted name.") : null) : null)) : null, d.medicinal ? React.createElement("div", {
+        }, LrefX(rf))))) : null, d.medicinal ? React.createElement("div", {
             style: {
                 marginTop: 14,
                 paddingTop: 12,
